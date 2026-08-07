@@ -15,6 +15,7 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
+    SerialPortSelector,
     TextSelector,
 )
 from modbus_connection import ModbusError
@@ -76,7 +77,7 @@ STEP_NETWORK_SCHEMA = vol.Schema(
 
 STEP_SERIAL_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_SERIAL_DEVICE): TextSelector(),
+        vol.Required(CONF_SERIAL_DEVICE): SerialPortSelector(),
         vol.Required(CONF_BAUDRATE, default=str(DEFAULT_BAUDRATE)): _BAUDRATE,
         vol.Required(CONF_PARITY, default=DEFAULT_PARITY): _PARITY,
         vol.Required(CONF_UNIT_ID, default=DEFAULT_UNIT_ID): _UNIT_ID,
