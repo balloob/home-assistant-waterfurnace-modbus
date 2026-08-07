@@ -18,7 +18,6 @@ from homeassistant.helpers.selector import (
     TextSelector,
 )
 from modbus_connection import ModbusError
-from modbus_connection.model import ComponentGroup
 
 from . import connection as connection_module
 from .const import (
@@ -94,10 +93,9 @@ async def _async_probe(
     """
     connection = connection_module.build_connection(data)
     try:
-        unit = connection.for_unit(data[CONF_UNIT_ID])
-        device = Series7(unit)
+        device = Series7(connection.for_unit(data[CONF_UNIT_ID]))
         # Only the identity registers: the first read establishes the link.
-        await ComponentGroup(unit, [device.info]).async_update()
+        await device.info.async_update()
         return device.info.serial_number, device.info.model
     finally:
         await connection.close()
