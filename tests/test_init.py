@@ -1,0 +1,64 @@
+"""Setup, teardown and connection-lifecycle tests."""
+
+from __future__ import annotations
+
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
+
+from custom_components.waterfurnace_modbus.const import DOMAIN, SCAN_INTERVAL
+
+from .conftest import ConnectionFactory
+
+
+async def test_setup_creates_the_device(
+    hass: HomeAssistant, config_entry: MockConfigEntry
+) -> None:
+    """One heat pump becomes one device with its Modbus-read identity."""
+    assert config_entry.state is ConfigEntryState.LOADED
+
+    device = dr.async_get(hass).async_get_device({(DOMAIN, config_entry.entry_id)})
+    assert device is not None
+    assert device.manufacturer == "WaterFurnace"
+    assert device.model == "NDV049A111"
+    assert device.serial_number == "1234567890"
+    assert device.sw_version == "3.05"
+
+
+async def test_unload_closes_the_connection(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_connection: ConnectionFactory,
+) -> None:
+    """Unloading tears the entry down and permanently closes the connection."""
+    assert await hass.config_entries.async_unload(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert config_entry.state is ConfigEntryState.NOT_LOADED
+    assert not mock_connection.connections[-1].connected
+
+
+async def test_a_dropped_link_heals_without_a_reload(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_connection: ConnectionFactory,
+) -> None:
+    """A drop marks entities unavailable; the next poll reconnects on its own."""
+    connection = mock_connection.connections[-1]
+    entity_id = "sensor.ndv049a111_entering_water_temperature"
+    assert hass.states.get(entity_id).state == "50.0"
+
+    connection.simulate_connection_lost()
+    # The link healing is the connection's own doing — the poll reconnects.
+    async_fire_time_changed(hass, dt_util.utcnow() + SCAN_INTERVAL)
+    await hass.async_block_till_done()
+
+    assert config_entry.state is ConfigEntryState.LOADED
+    assert hass.states.get(entity_id).state == "50.0"
+    # Only setup's connection was ever built: no reload, no rebuild.
+    assert len(mock_connection.connections) == 1

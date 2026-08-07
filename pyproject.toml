@@ -1,0 +1,35 @@
+[project]
+name = "waterfurnace-modbus-hass-tests"
+version = "0"
+description = "Dev/test environment for the WaterFurnace Aurora (Modbus) custom integration."
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    # The vendored device library's only dependency; also provides the
+    # in-memory MockModbusConnection the tests run against.
+    "modbus-connection>=4.1",
+    # Real Home Assistant plus its custom-component test harness.
+    "pytest-homeassistant-custom-component",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py313"
+# Vendored verbatim from balloob/waterfurnace-modbus; not linted here.
+extend-exclude = ["custom_components/waterfurnace_modbus/vendor"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true

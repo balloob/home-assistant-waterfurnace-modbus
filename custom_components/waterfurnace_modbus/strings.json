@@ -1,0 +1,198 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to the heat pump",
+        "menu_options": {
+          "network": "Network gateway (RTU over TCP, or Modbus TCP)",
+          "serial": "Serial / USB (RS-485)"
+        }
+      },
+      "network": {
+        "title": "Network gateway",
+        "description": "The Aurora is usually reached through a transparent serial (RTU-over-TCP) gateway on its RS-485 AID Tool port. Keep the RTU framing unless your gateway speaks native Modbus TCP.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "framer": "Wire framing",
+          "unit_id": "Modbus unit address"
+        }
+      },
+      "serial": {
+        "title": "Serial connection",
+        "description": "Direct RS-485 wiring to the AID Tool port. The Aurora default is 19200 baud, 8E1, unit address 1.",
+        "data": {
+          "serial_device": "Serial device",
+          "baudrate": "Baud rate",
+          "parity": "Parity",
+          "unit_id": "Modbus unit address"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect"
+    },
+    "abort": {
+      "already_configured": "Device is already configured"
+    }
+  },
+  "selector": {
+    "framer": {
+      "options": {
+        "rtu": "RTU over TCP (transparent serial gateway)",
+        "socket": "Native Modbus TCP"
+      }
+    },
+    "parity": {
+      "options": {
+        "E": "Even",
+        "N": "None",
+        "O": "Odd"
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "compressor_running": {
+        "name": "Compressor"
+      },
+      "blower_running": {
+        "name": "Blower"
+      },
+      "aux_heat": {
+        "name": "Auxiliary heat"
+      },
+      "active_dehumidification": {
+        "name": "Dehumidifying"
+      },
+      "locked_out": {
+        "name": "Lockout"
+      },
+      "emergency_shutdown": {
+        "name": "Emergency shutdown"
+      },
+      "low_pressure_switch_open": {
+        "name": "Low pressure switch"
+      },
+      "high_pressure_switch_open": {
+        "name": "High pressure switch"
+      },
+      "load_shed": {
+        "name": "Load shed"
+      }
+    },
+    "climate": {
+      "zone": {
+        "name": "Zone {zone}"
+      }
+    },
+    "number": {
+      "blower_only_speed": {
+        "name": "Fan-only blower speed"
+      },
+      "low_compressor_speed": {
+        "name": "Low compressor blower speed"
+      },
+      "high_compressor_speed": {
+        "name": "High compressor blower speed"
+      },
+      "aux_heat_speed": {
+        "name": "Auxiliary heat blower speed"
+      },
+      "pump_minimum_speed": {
+        "name": "Pump minimum speed"
+      },
+      "pump_maximum_speed": {
+        "name": "Pump maximum speed"
+      }
+    },
+    "sensor": {
+      "entering_water": {
+        "name": "Entering water temperature"
+      },
+      "leaving_water": {
+        "name": "Leaving water temperature"
+      },
+      "waterflow": {
+        "name": "Water flow"
+      },
+      "loop_pressure": {
+        "name": "Loop pressure"
+      },
+      "pump_output": {
+        "name": "Pump output"
+      },
+      "entering_air": {
+        "name": "Entering air temperature"
+      },
+      "leaving_air": {
+        "name": "Leaving air temperature"
+      },
+      "outdoor": {
+        "name": "Outdoor temperature"
+      },
+      "relative_humidity": {
+        "name": "Relative humidity"
+      },
+      "compressor_speed": {
+        "name": "Compressor speed"
+      },
+      "discharge_pressure": {
+        "name": "Discharge pressure"
+      },
+      "suction_pressure": {
+        "name": "Suction pressure"
+      },
+      "discharge_temperature": {
+        "name": "Discharge temperature"
+      },
+      "superheat": {
+        "name": "Superheat"
+      },
+      "blower_speed": {
+        "name": "Blower speed"
+      },
+      "line_voltage": {
+        "name": "Line voltage"
+      },
+      "aux_heat_stage": {
+        "name": "Auxiliary heat stage"
+      },
+      "fault": {
+        "name": "Fault"
+      },
+      "total_power": {
+        "name": "Total power"
+      },
+      "compressor_power": {
+        "name": "Compressor power"
+      },
+      "blower_power": {
+        "name": "Blower power"
+      },
+      "pump_power": {
+        "name": "Pump power"
+      },
+      "aux_power": {
+        "name": "Auxiliary heat power"
+      },
+      "heat_of_extraction": {
+        "name": "Heat of extraction"
+      },
+      "heat_of_rejection": {
+        "name": "Heat of rejection"
+      },
+      "compressor_amps": {
+        "name": "Compressor current"
+      },
+      "blower_amps": {
+        "name": "Blower current"
+      }
+    },
+    "water_heater": {
+      "dhw": {
+        "name": "Hot water"
+      }
+    }
+  }
+}
