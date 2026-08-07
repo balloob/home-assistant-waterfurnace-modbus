@@ -12,11 +12,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from modbus_connection import (
-    ModbusConnection,
-    ModbusSerialParams,
-    ModbusTcpParams,
-)
+from homeassistant.const import CONF_HOST, CONF_PORT
+from modbus_connection import ModbusSerialParams, ModbusTcpParams
+from modbus_connection.tmodbus import ModbusConnection
 
 from .const import (
     CONF_BAUDRATE,
@@ -31,20 +29,9 @@ from .const import (
     DEFAULT_PORT,
 )
 
-# HA constants are imported lazily where used; this module stays importable
-# from the device-library tests without Home Assistant installed.
-CONF_HOST = "host"
-CONF_PORT = "port"
-
 
 def build_connection(data: Mapping[str, Any]) -> ModbusConnection:
     """Return the (unconnected) connection for a config entry's data."""
-    # Resolved only when a real connection is built: the tests patch this
-    # function and run against the mock, so their environment installs
-    # modbus-connection without the tmodbus backend. In Home Assistant the
-    # manifest requirement guarantees the import succeeds.
-    from modbus_connection.tmodbus import ModbusConnection as TmodbusConnection
-
     if data.get(CONF_CONNECTION_TYPE) == CONNECTION_TYPE_SERIAL:
         params: ModbusTcpParams | ModbusSerialParams = ModbusSerialParams(
             device=data[CONF_SERIAL_DEVICE],
@@ -58,4 +45,4 @@ def build_connection(data: Mapping[str, Any]) -> ModbusConnection:
             port=data.get(CONF_PORT, DEFAULT_PORT),
             framer=data.get(CONF_FRAMER, DEFAULT_FRAMER),
         )
-    return TmodbusConnection(params)
+    return ModbusConnection(params)
