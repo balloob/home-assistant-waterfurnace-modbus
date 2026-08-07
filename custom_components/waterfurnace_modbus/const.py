@@ -23,7 +23,7 @@ CONNECTION_TYPE_SERIAL: Final = "serial"
 DEFAULT_PORT: Final = 502
 DEFAULT_FRAMER: Final = "rtu"
 DEFAULT_BAUDRATE: Final = 19200
-DEFAULT_PARITY: Final = "E"
+DEFAULT_PARITY: Final = "e"
 DEFAULT_UNIT_ID: Final = 1
 
 SCAN_INTERVAL: Final = timedelta(seconds=30)

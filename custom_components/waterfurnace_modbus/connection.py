@@ -45,7 +45,8 @@ def build_connection(data: Mapping[str, Any]) -> ModbusConnection:
         params: ModbusTcpParams | ModbusSerialParams = ModbusSerialParams(
             device=data[CONF_SERIAL_DEVICE],
             baudrate=data.get(CONF_BAUDRATE, DEFAULT_BAUDRATE),
-            parity=data.get(CONF_PARITY, DEFAULT_PARITY),
+            # Stored lowercase (translation keys must be); params want E/N/O.
+            parity=data.get(CONF_PARITY, DEFAULT_PARITY).upper(),
         )
     else:
         params = ModbusTcpParams(

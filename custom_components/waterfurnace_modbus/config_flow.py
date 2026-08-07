@@ -60,7 +60,7 @@ _BAUDRATE = SelectSelector(
 )
 _PARITY = SelectSelector(
     SelectSelectorConfig(
-        options=["E", "N", "O"],
+        options=["e", "n", "o"],
         mode=SelectSelectorMode.DROPDOWN,
         translation_key="parity",
     )
