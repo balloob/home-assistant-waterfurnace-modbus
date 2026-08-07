@@ -39,6 +39,10 @@ CONF_PORT = "port"
 
 def build_connection(data: Mapping[str, Any]) -> ModbusConnection:
     """Return the (unconnected) connection for a config entry's data."""
+    # Resolved only when a real connection is built: the tests patch this
+    # function and run against the mock, so their environment installs
+    # modbus-connection without the tmodbus backend. In Home Assistant the
+    # manifest requirement guarantees the import succeeds.
     from modbus_connection.tmodbus import ModbusConnection as TmodbusConnection
 
     if data.get(CONF_CONNECTION_TYPE) == CONNECTION_TYPE_SERIAL:
