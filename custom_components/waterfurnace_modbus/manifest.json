@@ -1,13 +1,19 @@
 {
   "domain": "waterfurnace_modbus",
   "name": "WaterFurnace Aurora (Modbus)",
-  "codeowners": ["@balloob"],
+  "codeowners": [
+    "@balloob"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/balloob/home-assistant-waterfurnace-modbus",
   "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/balloob/home-assistant-waterfurnace-modbus/issues",
-  "loggers": ["modbus_connection"],
-  "requirements": ["modbus-connection[tmodbus]>=4.1"],
+  "loggers": [
+    "modbus_connection"
+  ],
+  "requirements": [
+    "modbus-connection[tmodbus]>=4.2"
+  ],
   "version": "0.1.0"
 }

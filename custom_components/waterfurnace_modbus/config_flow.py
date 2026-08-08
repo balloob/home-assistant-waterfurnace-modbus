@@ -18,7 +18,11 @@ from homeassistant.helpers.selector import (
     SerialPortSelector,
     TextSelector,
 )
-from modbus_connection import ModbusError
+from modbus_connection import (
+    GatewayPathUnavailableError,
+    GatewayTargetError,
+    ModbusError,
+)
 
 from . import connection as connection_module
 from .const import (
@@ -152,6 +156,10 @@ class AuroraConfigFlow(ConfigFlow, domain=DOMAIN):
                 data[CONF_BAUDRATE] = int(data[CONF_BAUDRATE])
             try:
                 serial_number, title = await _async_probe(self.hass, data)
+            except (GatewayTargetError, GatewayPathUnavailableError):
+                # The gateway answered; the device behind it did not. Almost
+                # always a wrong unit address or an unwired AID Tool port.
+                errors["base"] = "device_not_responding"
             except ModbusError:
                 errors["base"] = "cannot_connect"
             else:

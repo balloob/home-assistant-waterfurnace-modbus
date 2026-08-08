@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
+from modbus_connection import ModbusTimeoutError
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
@@ -61,4 +63,39 @@ async def test_a_dropped_link_heals_without_a_reload(
     assert config_entry.state is ConfigEntryState.LOADED
     assert hass.states.get(entity_id).state == "50.0"
     # Only setup's connection was ever built: no reload, no rebuild.
+    assert len(mock_connection.connections) == 1
+
+
+async def test_a_stuck_link_is_recycled_after_repeated_timeouts(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_connection: ConnectionFactory,
+) -> None:
+    """A peer that answers nothing gets its link recycled, then heals.
+
+    Polls are driven directly — the subject is the coordinator's timeout
+    counting and recycle, not Home Assistant's refresh scheduling.
+    """
+    coordinator = config_entry.runtime_data
+    connection = mock_connection.connections[-1]
+    unit = mock_connection.unit
+    entity_id = "sensor.ndv049a111_entering_water_temperature"
+    assert connection.connected
+
+    unit.fail_requests(ModbusTimeoutError("no response"))
+    for _ in range(2):
+        await coordinator.async_refresh()
+    # Two timeouts: unavailable, but the link has not been recycled yet.
+    assert hass.states.get(entity_id).state == STATE_UNAVAILABLE
+    assert connection.connected
+
+    await coordinator.async_refresh()
+    # The third consecutive timeout tore the link down...
+    assert not connection.connected
+
+    # ...and once the peer answers again, the next poll reconnects and heals —
+    # same connection, same handles, no reload.
+    unit.fail_requests(None)
+    await coordinator.async_refresh()
+    assert hass.states.get(entity_id).state == "50.0"
     assert len(mock_connection.connections) == 1

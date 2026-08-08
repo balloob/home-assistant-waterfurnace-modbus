@@ -7,7 +7,7 @@ from unittest.mock import patch
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-from modbus_connection import ModbusConnectionError
+from modbus_connection import GatewayTargetError, ModbusConnectionError
 
 from custom_components.waterfurnace_modbus.const import (
     CONF_CONNECTION_TYPE,
@@ -85,6 +85,29 @@ async def test_network_flow_reports_an_unreachable_device(
     )
     await hass.async_block_till_done()
     assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_a_silent_device_behind_a_live_gateway_is_its_own_error(
+    hass: HomeAssistant, mock_connection: ConnectionFactory
+) -> None:
+    """A gateway exception (code 11) points at the unit address, not the host."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": CONNECTION_TYPE_NETWORK}
+    )
+
+    with patch(
+        "custom_components.waterfurnace_modbus.config_flow._async_probe",
+        side_effect=GatewayTargetError(),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], NETWORK_INPUT
+        )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "device_not_responding"}
 
 
 async def test_the_same_heat_pump_cannot_be_added_twice(
