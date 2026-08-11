@@ -2,7 +2,9 @@
 name = "waterfurnace-modbus-hass-tests"
 version = "0"
 description = "Dev/test environment for the WaterFurnace Aurora (Modbus) custom integration."
-requires-python = ">=3.13"
+# The test harness pins the Home Assistant version it ships, and Home
+# Assistant 2026.8 requires Python 3.14.
+requires-python = ">=3.14"
 dependencies = []
 
 [dependency-groups]
@@ -25,6 +27,9 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.ruff]
+# The test harness needs Python 3.14, but the integration still has to import
+# on the oldest Home Assistant a HACS user may run it on — so no 3.14-only
+# syntax (PEP 758 except clauses) in the component itself.
 target-version = "py313"
 # Vendored verbatim from balloob/waterfurnace-modbus; not linted here.
 extend-exclude = ["custom_components/waterfurnace_modbus/vendor"]
