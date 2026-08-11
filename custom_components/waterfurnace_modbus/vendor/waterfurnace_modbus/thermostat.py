@@ -9,13 +9,10 @@ and 12005) and written as a plain code (12606 and 12621).
 
 from __future__ import annotations
 
-from modbus_connection.model import enum, raw_register
+from modbus_connection.model import bit, bits, enum
 
 from .enums import FanMode, HeatingMode
 from .model import AuroraComponent, temperature
-
-_FAN_CONTINUOUS_BIT = 0x80
-_FAN_INTERMITTENT_BIT = 0x100
 
 
 class Thermostat(AuroraComponent):
@@ -25,8 +22,9 @@ class Thermostat(AuroraComponent):
     heating_setpoint = temperature(745)  # read; written via 12619
     cooling_setpoint = temperature(746)  # read; written via 12620
 
-    _mode_raw = raw_register(12006)  # mode packed in bits 8-10
-    _fan_config_raw = raw_register(12005)  # fan mode packed in bits 7-8
+    _mode_code = bits(12006, 8, 3)
+    _fan_continuous = bit(12005, 7)
+    _fan_intermittent = bit(12005, 8)
 
     # Write-side registers (distinct from the read addresses above).
     _heating_setpoint_cmd = temperature(12619, writable=True)
@@ -37,23 +35,23 @@ class Thermostat(AuroraComponent):
     @property
     def mode(self) -> HeatingMode | None:
         """Operating mode (off / auto / cool / heat / eheat)."""
-        raw = self._mode_raw
-        if raw is None:
+        code = self._mode_code
+        if code is None:
             return None
         try:
-            return HeatingMode((raw >> 8) & 0x07)
+            return HeatingMode(code)
         except ValueError:
             return None
 
     @property
     def fan_mode(self) -> FanMode | None:
         """Fan mode (auto / continuous / intermittent)."""
-        raw = self._fan_config_raw
-        if raw is None:
-            return None
-        if raw & _FAN_CONTINUOUS_BIT:
+        continuous = self._fan_continuous
+        if continuous is None:
+            return None  # both bits come from register 12005, unread so far
+        if continuous:
             return FanMode.CONTINUOUS
-        if raw & _FAN_INTERMITTENT_BIT:
+        if self._fan_intermittent:
             return FanMode.INTERMITTENT
         return FanMode.AUTO
 

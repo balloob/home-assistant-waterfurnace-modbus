@@ -11,7 +11,8 @@ control:
 - :func:`pressure`, an unsigned 0.1-scaled psi register.
 
 Everything on this device is a holding register (FC03); there are no coils, so
-booleans are packed as bits inside registers and read with :func:`flags`.
+booleans are packed as bits inside registers — read with :func:`flags` for a
+whole bitmask, or :func:`bit` / :func:`bits` for one setting inside a shared word.
 """
 
 from __future__ import annotations

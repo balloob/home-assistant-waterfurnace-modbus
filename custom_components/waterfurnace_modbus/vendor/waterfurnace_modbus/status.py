@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from modbus_connection.model import flags, integer, raw_register
+from modbus_connection.model import bit, bits, flags, integer
 
 from .enums import SystemOutput, SystemStatus
 from .model import AuroraComponent
 from .utils import fault_name
-
-_LOCKOUT_BIT = 0x8000
-_FAULT_MASK = 0x7FFF
 
 
 class Status(AuroraComponent):
@@ -20,8 +17,14 @@ class Status(AuroraComponent):
     line_voltage = integer(16, signed=False, unit="V")
     line_voltage_setting = integer(112, signed=False, writable=True, unit="V")
 
-    _last_fault_raw = raw_register(25)
-    _last_lockout_raw = raw_register(26)
+    # Registers 25 (last fault) and 26 (last lockout) both carry a fault code in
+    # bits 0-14 and a "locked out" flag in bit 15.
+    locked_out = bit(25, 15)
+    """Whether the controller is locked out on the last fault."""
+
+    _fault_code = bits(25, 0, 15)
+    _lockout_latched = bit(26, 15)
+    _lockout_code = bits(26, 0, 15)
 
     @property
     def aux_heat_stage(self) -> int | None:
@@ -41,22 +44,14 @@ class Status(AuroraComponent):
 
         Register 26 carries the code only while its high bit is set.
         """
-        raw = self._last_lockout_raw
-        if not raw or not raw & _LOCKOUT_BIT:
+        if not self._lockout_latched:
             return None
-        return fault_name(raw & _FAULT_MASK)
-
-    @property
-    def locked_out(self) -> bool:
-        """Whether the controller is locked out on the last fault."""
-        raw = self._last_fault_raw
-        return bool(raw and raw & _LOCKOUT_BIT)
+        return fault_name(self._lockout_code)
 
     @property
     def fault_code(self) -> int | None:
-        """The last fault code (0/``None`` = no fault)."""
-        raw = self._last_fault_raw
-        return (raw & _FAULT_MASK) if raw else None
+        """The last fault code, or ``None`` when there is no fault."""
+        return self._fault_code or None
 
     @property
     def fault(self) -> str | None:

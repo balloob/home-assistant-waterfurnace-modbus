@@ -7,14 +7,14 @@ Zone data is spread across two strided register blocks: the read side (ambient
 temperature and three packed *configuration* words) steps by 3 per zone, while
 the write side (mode, setpoints, fan) steps by 9. Each field carries its own
 stride, so a ``Zone`` is constructed with a 1-based ``index`` like a heating
-circuit. The packed configuration words are decoded exactly as the upstream
-``zone_configuration1/2/3`` helpers do — note the heating target's high bit lives
-in configuration word 1 and the rest in word 2.
+circuit. Every setting in the configuration words is declared as its own run of
+bits, matching the upstream ``zone_configuration1/2/3`` helpers — note the
+heating target's high bit lives in configuration word 1 and the rest in word 2.
 """
 
 from __future__ import annotations
 
-from modbus_connection.model import enum, raw_register
+from modbus_connection.model import bit, bits, enum
 
 from .enums import FanMode, HeatingMode, ZoneCall
 from .model import AuroraComponent, temperature
@@ -29,9 +29,25 @@ class Zone(AuroraComponent):
 
     ambient_temperature = temperature(31007, stride=3)
 
-    _config1_raw = raw_register(31008, stride=3)  # fan, times, cooling target, carry
-    _config2_raw = raw_register(31009, stride=3)  # call, mode, damper, heating target
-    _config3_raw = raw_register(31200, stride=3)  # priority, size
+    # Configuration word 1 (31008): fan, times, cooling target, heating carry.
+    _fan_continuous = bit(31008, 7, stride=3)
+    _fan_intermittent = bit(31008, 8, stride=3)
+    _cooling_target_code = bits(31008, 1, 6, stride=3)
+    _heating_target_carry = bits(31008, 0, 1, stride=3)
+
+    # Configuration word 2 (31009): call, mode, damper, heating target.
+    _call_code = bits(31009, 1, 3, stride=3)
+    _mode_code = bits(31009, 8, 2, stride=3)
+    _heating_target_low = bits(31009, 11, 5, stride=3)
+
+    damper_open = bit(31009, 4, stride=3)
+    """Whether the zone's damper is open."""
+
+    # Configuration word 3 (31200): priority, size.
+    _size_code = bits(31200, 3, 2, stride=3)
+
+    economy_priority = bit(31200, 5, stride=3)
+    """Whether the zone runs in economy priority (vs. comfort)."""
 
     # Write-side registers (a separate strided block).
     _mode_cmd = enum(21202, HeatingMode, stride=9, writable=True)
@@ -42,48 +58,42 @@ class Zone(AuroraComponent):
     @property
     def mode(self) -> HeatingMode | None:
         """Zone operating mode."""
-        raw = self._config2_raw
-        if raw is None:
+        code = self._mode_code
+        if code is None:
             return None
         try:
-            return HeatingMode((raw >> 8) & 0x03)
+            return HeatingMode(code)
         except ValueError:
             return None
 
     @property
     def call(self) -> ZoneCall | None:
         """The zone's current heating/cooling call."""
-        raw = self._config2_raw
-        if raw is None:
+        code = self._call_code
+        if code is None:
             return None
         try:
-            return ZoneCall((raw >> 1) & 0x07)
+            return ZoneCall(code)
         except ValueError:
             return None
 
     @property
-    def damper_open(self) -> bool | None:
-        """Whether the zone's damper is open."""
-        raw = self._config2_raw
-        return None if raw is None else bool(raw & 0x10)
-
-    @property
     def fan_mode(self) -> FanMode | None:
         """Zone fan mode."""
-        raw = self._config1_raw
-        if raw is None:
-            return None
-        if raw & 0x80:
+        continuous = self._fan_continuous
+        if continuous is None:
+            return None  # both bits come from configuration word 1, unread so far
+        if continuous:
             return FanMode.CONTINUOUS
-        if raw & 0x100:
+        if self._fan_intermittent:
             return FanMode.INTERMITTENT
         return FanMode.AUTO
 
     @property
     def cooling_target(self) -> int | None:
         """Effective cooling target temperature (°F)."""
-        raw = self._config1_raw
-        return None if raw is None else ((raw & 0x7E) >> 1) + _TEMP_BASE
+        code = self._cooling_target_code
+        return None if code is None else code + _TEMP_BASE
 
     @property
     def heating_target(self) -> int | None:
@@ -92,24 +102,17 @@ class Zone(AuroraComponent):
         The value's high bit is carried in configuration word 1 and the low five
         bits in word 2, so both reads must be present.
         """
-        config1 = self._config1_raw
-        config2 = self._config2_raw
-        if config1 is None or config2 is None:
+        carry = self._heating_target_carry
+        low = self._heating_target_low
+        if carry is None or low is None:
             return None
-        carry = config1 & 0x01
-        return ((carry << 5) | ((config2 & 0xF800) >> 11)) + _TEMP_BASE
-
-    @property
-    def economy_priority(self) -> bool | None:
-        """Whether the zone runs in economy priority (vs. comfort)."""
-        raw = self._config3_raw
-        return None if raw is None else bool(raw & 0x20)
+        return ((carry << 5) | low) + _TEMP_BASE
 
     @property
     def size(self) -> int | None:
         """The zone's relative size (0, 25, 45 or 70)."""
-        raw = self._config3_raw
-        return None if raw is None else _ZONE_SIZES.get((raw >> 3) & 0x03)
+        code = self._size_code
+        return None if code is None else _ZONE_SIZES.get(code)
 
     async def set_mode(self, mode: HeatingMode) -> None:
         """Set the zone operating mode."""

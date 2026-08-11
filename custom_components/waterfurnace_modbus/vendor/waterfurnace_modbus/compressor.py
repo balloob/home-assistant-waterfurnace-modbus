@@ -8,12 +8,10 @@ the current stage (they differ during a ramp).
 
 from __future__ import annotations
 
-from modbus_connection.model import flags, gauge, integer, raw_register, uint32
+from modbus_connection.model import bit, flags, gauge, integer, uint32
 
 from .enums import VSAlarm, VSDriveDerate, VSSafeMode
 from .model import AuroraComponent, pressure, temperature
-
-_INTERNAL_ERROR_BIT = 0x8000  # register 3226 (VS drive alarm 1)
 
 
 class Compressor(AuroraComponent):
@@ -49,10 +47,6 @@ class Compressor(AuroraComponent):
     derate = flags(3223, VSDriveDerate)
     safe_mode = flags(3225, VSSafeMode)
     alarm = flags(3227, VSAlarm)
-    _alarm1_raw = raw_register(3226)
 
-    @property
-    def internal_error(self) -> bool | None:
-        """Whether the VS drive reports an internal error (alarm 1)."""
-        raw = self._alarm1_raw
-        return None if raw is None else bool(raw & _INTERNAL_ERROR_BIT)
+    internal_error = bit(3226, 15)  # the only bit of alarm word 1 that is mapped
+    """Whether the VS drive reports an internal error (alarm 1)."""
