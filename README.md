@@ -23,7 +23,9 @@ The Aurora ABC speaks **Modbus RTU on RS-485 at 19200 8E1, unit address 1** on t
 - **Network** — a transparent serial (RTU-over-TCP) gateway wired to the AID Tool port. This is the usual setup; the integration defaults to RTU framing. Pick *native Modbus TCP* only if your gateway re-frames.
 - **Serial** — an RS-485 adapter on the Home Assistant host.
 
-The connection is managed for you: it opens on the first poll and re-establishes itself after a drop. A link that is up but silent — a bridge that keeps the socket open while the device behind it stops answering — is recycled after three timed-out polls. Either way, a heat pump that goes offline comes back on its own — no reload needed.
+Setup reads the heat pump once for its identity and installed hardware — which boards are fitted, how many IntelliZone 2 zones it has — and every poll after that covers only the registers that can change, in one pooled block read.
+
+The connection is managed for you: it opens on the first read and re-establishes itself after a drop. A link that is up but silent — a bridge that keeps the socket open while the device behind it stops answering — is recycled after three timed-out polls. Either way, a heat pump that goes offline comes back on its own — no reload needed.
 
 ## Installation
 

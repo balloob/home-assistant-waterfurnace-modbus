@@ -17,7 +17,6 @@ from modbus_connection import (
     ModbusTimeoutError,
     ModbusUnit,
 )
-from modbus_connection.model import ComponentGroup
 
 from .const import DOMAIN, SCAN_INTERVAL
 from .vendor.waterfurnace_modbus import Series7
@@ -35,11 +34,10 @@ type AuroraConfigEntry = ConfigEntry[AuroraCoordinator]
 class AuroraCoordinator(DataUpdateCoordinator[None]):
     """Poll the live sub-systems of a Series7 in one pooled read.
 
-    ``config``, ``peripherals`` and ``info`` are read once during setup — they
-    describe the installed hardware and never change while the unit runs — so
-    each poll covers only the sub-systems entities actually display: status,
-    sensors, compressor, blower, pump, DHW, thermostat, humidistat, energy,
-    and the zones the IZ2 board reports.
+    Which sub-systems those are is the library's call: ``async_setup()`` has
+    already read the registers that describe the installed hardware — identity,
+    configuration, board presence, dealer details — so ``async_update()``
+    refreshes only what can change between two polls.
 
     A dropped link is not an entry reload: the connection re-establishes
     itself on the next request, so a failed poll marks the entities
@@ -54,7 +52,7 @@ class AuroraCoordinator(DataUpdateCoordinator[None]):
         connection: ModbusConnection,
         unit: ModbusUnit,
     ) -> None:
-        """Initialize the coordinator over the polled component group."""
+        """Initialize the coordinator over a device that has been set up."""
         super().__init__(
             hass,
             _LOGGER,
@@ -66,23 +64,8 @@ class AuroraCoordinator(DataUpdateCoordinator[None]):
         self.unit = unit
         self._connection = connection
         self._consecutive_timeouts = 0
-        zone_count = device.config.number_of_zones or 0
-        self.zones = device.zones[:zone_count]
-        self._group = ComponentGroup(
-            unit,
-            [
-                device.status,
-                device.sensors,
-                device.compressor,
-                device.blower,
-                device.pump,
-                device.dhw,
-                device.thermostat,
-                device.humidistat,
-                device.energy,
-                *self.zones,
-            ],
-        )
+        # The zones the IZ2 board reported during setup; one entity set each.
+        self.zones = device.live_zones
 
     async def _async_update_data(self) -> None:
         """Refresh every polled sub-system in a pooled block read.
@@ -93,7 +76,7 @@ class AuroraCoordinator(DataUpdateCoordinator[None]):
         the next poll opens a fresh one over the same handles.
         """
         try:
-            await self._group.async_update()
+            await self.device.async_update()
         except ModbusTimeoutError as err:
             self._consecutive_timeouts += 1
             if self._consecutive_timeouts >= _STUCK_LINK_TIMEOUTS:

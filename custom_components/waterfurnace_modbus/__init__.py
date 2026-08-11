@@ -11,7 +11,6 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from modbus_connection import ModbusError
-from modbus_connection.model import ComponentGroup
 
 from . import connection as connection_module
 from .const import CONF_UNIT_ID, DEFAULT_UNIT_ID
@@ -37,12 +36,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: AuroraConfigEntry) -> bo
     unit = connection.for_unit(entry.data.get(CONF_UNIT_ID, DEFAULT_UNIT_ID))
     device = Series7(unit)
 
-    # One discovery read: identity plus the installed-hardware registers that
-    # decide which entities exist (zone count, energy monitor, DHW).
+    # The library's setup read: identity plus the installed-hardware registers
+    # that decide which entities exist (zone count, energy monitor, DHW). Doing
+    # it here rather than leaving it to the first poll is what makes an
+    # unreadable heat pump a retried setup instead of a loaded, empty entry.
     try:
-        await ComponentGroup(
-            unit, [device.info, device.config, device.peripherals]
-        ).async_update()
+        await device.async_setup()
     except ModbusError as err:
         raise ConfigEntryNotReady(f"Could not read the heat pump: {err}") from err
 

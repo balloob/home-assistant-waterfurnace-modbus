@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
+from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 from modbus_connection import ModbusTimeoutError
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -14,8 +17,9 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.waterfurnace_modbus.const import DOMAIN, SCAN_INTERVAL
+from custom_components.waterfurnace_modbus.vendor.waterfurnace_modbus import Series7
 
-from .conftest import ConnectionFactory
+from .conftest import ENTRY_DATA, ConnectionFactory
 
 
 async def test_setup_creates_the_device(
@@ -30,6 +34,30 @@ async def test_setup_creates_the_device(
     assert device.model == "NDV049A111"
     assert device.serial_number == "1234567890"
     assert device.sw_version == "3.05"
+
+
+async def test_an_unreadable_heat_pump_retries_setup(
+    hass: HomeAssistant, mock_connection: ConnectionFactory
+) -> None:
+    """A device that cannot be read is a retried setup, not a loaded empty entry.
+
+    The library's setup read runs from ``async_setup_entry``, so a heat pump
+    that does not answer never reaches the coordinator.
+    """
+    hass.config.units = US_CUSTOMARY_SYSTEM
+    entry = MockConfigEntry(domain=DOMAIN, title="NDV049A111", data=ENTRY_DATA)
+    entry.add_to_hass(hass)
+    with (
+        patch.object(
+            Series7, "async_setup", side_effect=ModbusTimeoutError("no response")
+        ),
+        patch.object(Series7, "async_update") as poll,
+    ):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    assert not poll.called  # the setup read failed before any poll was tried
 
 
 async def test_unload_closes_the_connection(

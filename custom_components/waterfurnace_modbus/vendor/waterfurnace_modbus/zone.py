@@ -1,7 +1,8 @@
 """An IntelliZone 2 (IZ2) zone.
 
-Each zone behaves like its own thermostat. The unit reports up to six; read the
-count from :attr:`Configuration.number_of_zones` and use only that many.
+Each zone behaves like its own thermostat. The unit reports up to six; the ones
+it actually has are :attr:`Series7.live_zones`, sized from
+:attr:`Configuration.number_of_zones` during setup.
 
 Zone data is spread across two strided register blocks: the read side (ambient
 temperature and three packed *configuration* words) steps by 3 per zone, while
