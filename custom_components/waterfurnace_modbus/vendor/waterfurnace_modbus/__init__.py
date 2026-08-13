@@ -45,6 +45,7 @@ from .enums import (
     ZoneCall,
 )
 from .humidistat import Humidistat
+from .model import UpdateReport
 from .peripherals import Peripherals
 from .pump import Pump
 from .sensors import Sensors
@@ -79,6 +80,7 @@ __all__ = [
     "SystemOutput",
     "SystemStatus",
     "Thermostat",
+    "UpdateReport",
     "VSAlarm",
     "VSDriveDerate",
     "VSSafeMode",

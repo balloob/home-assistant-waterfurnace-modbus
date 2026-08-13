@@ -47,7 +47,7 @@ class AuroraWaterHeater(AuroraEntity, WaterHeaterEntity):
 
     def __init__(self, coordinator: AuroraCoordinator) -> None:
         """Initialize the DHW entity."""
-        super().__init__(coordinator, "dhw")
+        super().__init__(coordinator, "dhw", components=("dhw",))
 
     @property
     def current_temperature(self) -> float | None:

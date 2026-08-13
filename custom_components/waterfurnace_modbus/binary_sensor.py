@@ -29,6 +29,7 @@ def _output(device: Series7, flag: SystemOutput) -> bool | None:
 class AuroraBinarySensorDescription(BinarySensorEntityDescription):
     """Describes an Aurora on/off state as a read off the device object."""
 
+    component: str  # the sub-system value_fn reads, as the UpdateReport keys it
     value_fn: Callable[[Series7], bool | None]
 
 
@@ -36,30 +37,35 @@ BINARY_SENSORS: tuple[AuroraBinarySensorDescription, ...] = (
     AuroraBinarySensorDescription(
         key="compressor_running",
         translation_key="compressor_running",
+        component="status",
         device_class=BinarySensorDeviceClass.RUNNING,
         value_fn=lambda d: _output(d, SystemOutput.COMPRESSOR_1),
     ),
     AuroraBinarySensorDescription(
         key="blower_running",
         translation_key="blower_running",
+        component="status",
         device_class=BinarySensorDeviceClass.RUNNING,
         value_fn=lambda d: _output(d, SystemOutput.BLOWER),
     ),
     AuroraBinarySensorDescription(
         key="aux_heat",
         translation_key="aux_heat",
+        component="status",
         device_class=BinarySensorDeviceClass.HEAT,
         value_fn=lambda d: _output(d, SystemOutput.AUX_HEAT_1),
     ),
     AuroraBinarySensorDescription(
         key="active_dehumidification",
         translation_key="active_dehumidification",
+        component="humidistat",
         device_class=BinarySensorDeviceClass.RUNNING,
         value_fn=lambda d: d.humidistat.active_dehumidification,
     ),
     AuroraBinarySensorDescription(
         key="locked_out",
         translation_key="locked_out",
+        component="status",
         device_class=BinarySensorDeviceClass.PROBLEM,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda d: d.status.locked_out,
@@ -67,6 +73,7 @@ BINARY_SENSORS: tuple[AuroraBinarySensorDescription, ...] = (
     AuroraBinarySensorDescription(
         key="emergency_shutdown",
         translation_key="emergency_shutdown",
+        component="status",
         device_class=BinarySensorDeviceClass.PROBLEM,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda d: d.status.emergency_shutdown,
@@ -76,6 +83,7 @@ BINARY_SENSORS: tuple[AuroraBinarySensorDescription, ...] = (
     AuroraBinarySensorDescription(
         key="low_pressure_switch_open",
         translation_key="low_pressure_switch_open",
+        component="status",
         device_class=BinarySensorDeviceClass.PROBLEM,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda d: _invert(d.status.low_pressure_switch_closed),
@@ -83,6 +91,7 @@ BINARY_SENSORS: tuple[AuroraBinarySensorDescription, ...] = (
     AuroraBinarySensorDescription(
         key="high_pressure_switch_open",
         translation_key="high_pressure_switch_open",
+        component="status",
         device_class=BinarySensorDeviceClass.PROBLEM,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda d: _invert(d.status.high_pressure_switch_closed),
@@ -90,6 +99,7 @@ BINARY_SENSORS: tuple[AuroraBinarySensorDescription, ...] = (
     AuroraBinarySensorDescription(
         key="load_shed",
         translation_key="load_shed",
+        component="status",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda d: d.status.load_shed,
     ),
@@ -124,7 +134,9 @@ class AuroraBinarySensor(AuroraEntity, BinarySensorEntity):
         description: AuroraBinarySensorDescription,
     ) -> None:
         """Initialize from the description."""
-        super().__init__(coordinator, description.key)
+        super().__init__(
+            coordinator, description.key, components=(description.component,)
+        )
         self.entity_description = description
 
     @property

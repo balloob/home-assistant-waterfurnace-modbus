@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from modbus_connection import (
+    IllegalDataAddressError,
+    IllegalFunctionError,
+    ModbusConnectionError,
+    ModbusError,
+)
 from modbus_connection.model import Component, ComponentGroup
 
 from .blower import Blower
@@ -14,6 +20,7 @@ from .device_info import DeviceInformation
 from .dhw import DHW
 from .energy import Energy
 from .humidistat import Humidistat
+from .model import AuroraComponent, UpdateReport
 from .peripherals import Peripherals
 from .pump import Pump
 from .sensors import Sensors
@@ -25,6 +32,20 @@ if TYPE_CHECKING:
     from modbus_connection import ModbusUnit
 
 MAX_ZONES = 6  # the IZ2 board supports up to six zones
+
+# Every fixed component attribute a poll may refresh, in read order. The live
+# zones are appended in async_setup(), keyed by their 1-based position.
+_POLLED = (
+    "status",
+    "sensors",
+    "compressor",
+    "blower",
+    "pump",
+    "dhw",
+    "thermostat",
+    "humidistat",
+    "energy",
+)
 
 
 class Series7:
@@ -75,7 +96,7 @@ class Series7:
         self.zones = tuple(Zone(unit, index=i) for i in range(1, MAX_ZONES + 1))
         # Both settled by async_setup(), which needs the zone count off the device.
         self.live_zones: tuple[Zone, ...] = ()
-        self._group: ComponentGroup | None = None
+        self._polled: dict[str, AuroraComponent] | None = None
 
     @property
     def components(self) -> tuple[Component, ...]:
@@ -97,28 +118,6 @@ class Series7:
             *self.zones,
         )
 
-    @property
-    def polled_components(self) -> tuple[Component, ...]:
-        """The sub-systems a poll refreshes: everything that can change.
-
-        Only the zones are dropped for a unit that does not have them. A board
-        the unit lacks — no AXB, no energy monitor — still answers its registers
-        with ``0`` rather than refusing them, so leaving :attr:`dhw` and
-        :attr:`energy` in costs a few registers and never a failed read.
-        """
-        return (
-            self.status,
-            self.sensors,
-            self.compressor,
-            self.blower,
-            self.pump,
-            self.dhw,
-            self.thermostat,
-            self.humidistat,
-            self.energy,
-            *self.live_zones,
-        )
-
     async def async_setup(self) -> None:
         """Read what cannot change while the unit runs, and settle what to poll.
 
@@ -127,25 +126,50 @@ class Series7:
         "this poll failed" are different outcomes, as they are for a Home
         Assistant config entry. A failure leaves the device unset up, so the
         next :meth:`async_update` tries again.
+
+        Identity, configuration and board presence are what the device is; the
+        dealer block is commissioning trivia the AWL tools write, so a unit that
+        refuses those addresses outright is set up without it rather than never
+        set up at all.
         """
         await ComponentGroup(
-            self._unit, [self.info, self.config, self.peripherals, self.dealer]
+            self._unit, [self.info, self.config, self.peripherals]
         ).async_update()
+        try:
+            await self.dealer.async_update()
+        except (IllegalDataAddressError, IllegalFunctionError):
+            pass  # this unit does not serve the block; a transient error still raises
         self.live_zones = self.zones[: self.config.number_of_zones or 0]
-        # One pooled-read group over every polled sub-system; it derives the
-        # readable ranges from the components and caches its block plan.
-        self._group = ComponentGroup(self._unit, self.polled_components)
+        # The poll list doubles as the setup marker: None means "not set up yet".
+        self._polled = {name: getattr(self, name) for name in _POLLED}
+        self._polled.update(
+            (f"zone_{index}", zone)
+            for index, zone in enumerate(self.live_zones, start=1)
+        )
 
-    async def async_update(self) -> None:
-        """Refresh every polled sub-system in as few Modbus calls as possible.
+    async def async_update(self) -> UpdateReport:
+        """Refresh every polled sub-system, one at a time.
 
-        The first call sets the device up (:meth:`async_setup`). All sub-systems
-        share one unit, so their register reads are pooled into a single
-        consolidated set of block reads — adjacent registers from different
-        sub-systems are fetched together — rather than each component querying
-        independently. Listeners then fire per sub-system.
+        The first call sets the device up (:meth:`async_setup`). Sub-systems are
+        read independently: one that fails keeps its previous values while the
+        rest still refresh. Listeners fire only after every sub-system has been
+        tried, and only for the ones that refreshed. A failure of the link itself
+        raises ``ModbusConnectionError`` instead of reporting.
         """
-        if self._group is None:
+        if self._polled is None:
             await self.async_setup()
-        assert self._group is not None  # async_setup() always builds it
-        await self._group.async_update()
+        assert self._polled is not None  # async_setup() builds it
+        updated: set[str] = set()
+        failed: dict[str, ModbusError] = {}
+        for name, component in self._polled.items():
+            try:
+                await component.async_update(notify=False)
+            except ModbusConnectionError:
+                raise
+            except ModbusError as err:
+                failed[name] = err
+            else:
+                updated.add(name)
+        for name in updated:
+            self._polled[name].notify()
+        return UpdateReport(updated, failed)

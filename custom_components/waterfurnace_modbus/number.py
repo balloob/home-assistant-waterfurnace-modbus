@@ -24,12 +24,14 @@ from .vendor.waterfurnace_modbus import Series7
 class AuroraNumberDescription(NumberEntityDescription):
     """Describes an installer setting: a read plus its setter."""
 
+    component: str  # the sub-system value_fn reads, as the UpdateReport keys it
     value_fn: Callable[[Series7], int | None]
     set_fn: Callable[[Series7, int], Awaitable[None]]
 
 
 def _ecm_speed(
     key: str,
+    component: str,
     value_fn: Callable[[Series7], int | None],
     set_fn: Callable[[Series7, int], Awaitable[None]],
 ) -> AuroraNumberDescription:
@@ -37,6 +39,7 @@ def _ecm_speed(
     return AuroraNumberDescription(
         key=key,
         translation_key=key,
+        component=component,
         native_min_value=1,
         native_max_value=12,
         native_step=1,
@@ -52,27 +55,32 @@ def _ecm_speed(
 NUMBERS: tuple[AuroraNumberDescription, ...] = (
     _ecm_speed(
         "blower_only_speed",
+        "blower",
         lambda d: d.blower.blower_only_speed,
         lambda d, v: d.blower.set_blower_only_speed(v),
     ),
     _ecm_speed(
         "low_compressor_speed",
+        "blower",
         lambda d: d.blower.low_compressor_speed,
         lambda d, v: d.blower.set_low_compressor_speed(v),
     ),
     _ecm_speed(
         "high_compressor_speed",
+        "blower",
         lambda d: d.blower.high_compressor_speed,
         lambda d, v: d.blower.set_high_compressor_speed(v),
     ),
     _ecm_speed(
         "aux_heat_speed",
+        "blower",
         lambda d: d.blower.aux_heat_speed,
         lambda d, v: d.blower.set_aux_heat_speed(v),
     ),
     AuroraNumberDescription(
         key="pump_minimum_speed",
         translation_key="pump_minimum_speed",
+        component="pump",
         native_min_value=1,
         native_max_value=100,
         native_step=1,
@@ -86,6 +94,7 @@ NUMBERS: tuple[AuroraNumberDescription, ...] = (
     AuroraNumberDescription(
         key="pump_maximum_speed",
         translation_key="pump_maximum_speed",
+        component="pump",
         native_min_value=1,
         native_max_value=100,
         native_step=1,
@@ -119,7 +128,9 @@ class AuroraNumber(AuroraEntity, NumberEntity):
         self, coordinator: AuroraCoordinator, description: AuroraNumberDescription
     ) -> None:
         """Initialize from the description."""
-        super().__init__(coordinator, description.key)
+        super().__init__(
+            coordinator, description.key, components=(description.component,)
+        )
         self.entity_description = description
 
     @property

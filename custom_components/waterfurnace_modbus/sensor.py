@@ -33,11 +33,13 @@ from .vendor.waterfurnace_modbus import EnergyMonitorType, Series7
 class AuroraSensorDescription(SensorEntityDescription):
     """Describes an Aurora sensor as a read off the device object."""
 
+    component: str  # the sub-system value_fn reads, as the UpdateReport keys it
     value_fn: Callable[[Series7], float | int | str | None]
 
 
 def _temperature(
     key: str,
+    component: str,
     value_fn: Callable[[Series7], float | None],
     *,
     diagnostic: bool = False,
@@ -46,6 +48,7 @@ def _temperature(
     return AuroraSensorDescription(
         key=key,
         translation_key=key,
+        component=component,
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTemperature.FAHRENHEIT,
@@ -61,6 +64,7 @@ def _power(
     return AuroraSensorDescription(
         key=key,
         translation_key=key,
+        component="energy",
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPower.WATT,
@@ -70,11 +74,12 @@ def _power(
 
 SENSORS: tuple[AuroraSensorDescription, ...] = (
     # -- water loop --
-    _temperature("entering_water", lambda d: d.sensors.entering_water),
-    _temperature("leaving_water", lambda d: d.sensors.leaving_water),
+    _temperature("entering_water", "sensors", lambda d: d.sensors.entering_water),
+    _temperature("leaving_water", "sensors", lambda d: d.sensors.leaving_water),
     AuroraSensorDescription(
         key="waterflow",
         translation_key="waterflow",
+        component="pump",
         device_class=SensorDeviceClass.VOLUME_FLOW_RATE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfVolumeFlowRate.GALLONS_PER_MINUTE,
@@ -83,6 +88,7 @@ SENSORS: tuple[AuroraSensorDescription, ...] = (
     AuroraSensorDescription(
         key="loop_pressure",
         translation_key="loop_pressure",
+        component="pump",
         device_class=SensorDeviceClass.PRESSURE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPressure.PSI,
@@ -91,18 +97,20 @@ SENSORS: tuple[AuroraSensorDescription, ...] = (
     AuroraSensorDescription(
         key="pump_output",
         translation_key="pump_output",
+        component="pump",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda d: d.pump.output,
     ),
     # -- air --
-    _temperature("entering_air", lambda d: d.sensors.entering_air),
-    _temperature("leaving_air", lambda d: d.sensors.leaving_air),
-    _temperature("outdoor", lambda d: d.sensors.outdoor),
+    _temperature("entering_air", "sensors", lambda d: d.sensors.entering_air),
+    _temperature("leaving_air", "sensors", lambda d: d.sensors.leaving_air),
+    _temperature("outdoor", "sensors", lambda d: d.sensors.outdoor),
     AuroraSensorDescription(
         key="relative_humidity",
         translation_key="relative_humidity",
+        component="sensors",
         device_class=SensorDeviceClass.HUMIDITY,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
@@ -112,12 +120,14 @@ SENSORS: tuple[AuroraSensorDescription, ...] = (
     AuroraSensorDescription(
         key="compressor_speed",
         translation_key="compressor_speed",
+        component="compressor",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda d: d.compressor.speed_actual,
     ),
     AuroraSensorDescription(
         key="discharge_pressure",
         translation_key="discharge_pressure",
+        component="compressor",
         device_class=SensorDeviceClass.PRESSURE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPressure.PSI,
@@ -127,6 +137,7 @@ SENSORS: tuple[AuroraSensorDescription, ...] = (
     AuroraSensorDescription(
         key="suction_pressure",
         translation_key="suction_pressure",
+        component="compressor",
         device_class=SensorDeviceClass.PRESSURE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPressure.PSI,
@@ -135,14 +146,18 @@ SENSORS: tuple[AuroraSensorDescription, ...] = (
     ),
     _temperature(
         "discharge_temperature",
+        "compressor",
         lambda d: d.compressor.discharge_temperature,
         diagnostic=True,
     ),
-    _temperature("superheat", lambda d: d.compressor.superheat, diagnostic=True),
+    _temperature(
+        "superheat", "compressor", lambda d: d.compressor.superheat, diagnostic=True
+    ),
     # -- blower --
     AuroraSensorDescription(
         key="blower_speed",
         translation_key="blower_speed",
+        component="blower",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda d: d.blower.speed,
     ),
@@ -150,6 +165,7 @@ SENSORS: tuple[AuroraSensorDescription, ...] = (
     AuroraSensorDescription(
         key="line_voltage",
         translation_key="line_voltage",
+        component="status",
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
@@ -159,6 +175,7 @@ SENSORS: tuple[AuroraSensorDescription, ...] = (
     AuroraSensorDescription(
         key="aux_heat_stage",
         translation_key="aux_heat_stage",
+        component="status",
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda d: d.status.aux_heat_stage,
@@ -166,6 +183,7 @@ SENSORS: tuple[AuroraSensorDescription, ...] = (
     AuroraSensorDescription(
         key="fault",
         translation_key="fault",
+        component="status",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda d: d.status.fault or "none",
     ),
@@ -182,6 +200,7 @@ ENERGY_SENSORS: tuple[AuroraSensorDescription, ...] = (
     AuroraSensorDescription(
         key="heat_of_extraction",
         translation_key="heat_of_extraction",
+        component="energy",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPower.BTU_PER_HOUR,
         value_fn=lambda d: d.energy.heat_of_extraction,
@@ -189,6 +208,7 @@ ENERGY_SENSORS: tuple[AuroraSensorDescription, ...] = (
     AuroraSensorDescription(
         key="heat_of_rejection",
         translation_key="heat_of_rejection",
+        component="energy",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPower.BTU_PER_HOUR,
         value_fn=lambda d: d.energy.heat_of_rejection,
@@ -196,6 +216,7 @@ ENERGY_SENSORS: tuple[AuroraSensorDescription, ...] = (
     AuroraSensorDescription(
         key="compressor_amps",
         translation_key="compressor_amps",
+        component="compressor",
         device_class=SensorDeviceClass.CURRENT,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
@@ -205,6 +226,7 @@ ENERGY_SENSORS: tuple[AuroraSensorDescription, ...] = (
     AuroraSensorDescription(
         key="blower_amps",
         translation_key="blower_amps",
+        component="blower",
         device_class=SensorDeviceClass.CURRENT,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
@@ -238,7 +260,9 @@ class AuroraSensor(AuroraEntity, SensorEntity):
         self, coordinator: AuroraCoordinator, description: AuroraSensorDescription
     ) -> None:
         """Initialize from the description."""
-        super().__init__(coordinator, description.key)
+        super().__init__(
+            coordinator, description.key, components=(description.component,)
+        )
         self.entity_description = description
 
     @property

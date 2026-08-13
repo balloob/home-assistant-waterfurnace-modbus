@@ -191,7 +191,8 @@ class AuroraThermostat(AuroraClimate):
 
     def __init__(self, coordinator: AuroraCoordinator) -> None:
         """Initialize the thermostat entity."""
-        super().__init__(coordinator, "thermostat")
+        # hvac_action reads the controller's outputs, not the thermostat block.
+        super().__init__(coordinator, "thermostat", components=("thermostat", "status"))
 
     @property
     def _component(self) -> Thermostat:
@@ -232,7 +233,8 @@ class AuroraZone(AuroraClimate):
 
     def __init__(self, coordinator: AuroraCoordinator, zone: Zone, index: int) -> None:
         """Initialize a zone entity."""
-        super().__init__(coordinator, f"zone_{index}")
+        # The report keys zones the same way, off their live_zones position.
+        super().__init__(coordinator, f"zone_{index}", components=(f"zone_{index}",))
         self._zone = zone
         self._attr_translation_placeholders = {"zone": str(index)}
 
