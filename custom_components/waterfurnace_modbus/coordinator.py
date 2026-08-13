@@ -11,12 +11,7 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
-from modbus_connection import (
-    ModbusConnection,
-    ModbusError,
-    ModbusTimeoutError,
-    ModbusUnit,
-)
+from modbus_connection import ModbusConnection, ModbusError, ModbusTimeoutError
 
 from .const import DOMAIN, SCAN_INTERVAL
 from .vendor.waterfurnace_modbus import Series7, UpdateReport
@@ -48,13 +43,14 @@ class AuroraCoordinator(DataUpdateCoordinator[UpdateReport]):
     on the next request, so the next successful poll brings the entities back.
     """
 
+    _failed: frozenset[str] = frozenset()
+
     def __init__(
         self,
         hass: HomeAssistant,
         entry: AuroraConfigEntry,
         device: Series7,
         connection: ModbusConnection,
-        unit: ModbusUnit,
     ) -> None:
         """Initialize the coordinator over a device that has been set up."""
         super().__init__(
@@ -65,7 +61,6 @@ class AuroraCoordinator(DataUpdateCoordinator[UpdateReport]):
             update_interval=SCAN_INTERVAL,
         )
         self.device = device
-        self.unit = unit
         self._connection = connection
         self._consecutive_timeouts = 0
         # The zones the IZ2 board reported during setup; one entity set each.
@@ -99,12 +94,15 @@ class AuroraCoordinator(DataUpdateCoordinator[UpdateReport]):
                     # The link is dropped even when the teardown itself errors.
                     with contextlib.suppress(ModbusError):
                         await self._connection.disconnect()
-            raise UpdateFailed(f"The heat pump did not respond: {errors[0]}")
+            # Home Assistant logs str(err) at error level and the traceback at
+            # debug, so the message names a failure and the chained group keeps
+            # the rest reachable.
+            raise UpdateFailed(
+                f"The heat pump did not respond: {errors[0]}"
+            ) from ExceptionGroup("every sub-system failed", errors)
 
         self._consecutive_timeouts = 0
-        if report.failed:
-            _LOGGER.debug(
-                "Kept previous values for %s",
-                ", ".join(f"{name} ({err})" for name, err in report.failed.items()),
-            )
+        for name in sorted(report.failed.keys() - self._failed):
+            _LOGGER.warning("Failed to fetch %s: %s", name, report.failed[name])
+        self._failed = frozenset(report.failed)
         return report

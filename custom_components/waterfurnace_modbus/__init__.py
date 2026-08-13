@@ -45,7 +45,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AuroraConfigEntry) -> bo
     except ModbusError as err:
         raise ConfigEntryNotReady(f"Could not read the heat pump: {err}") from err
 
-    coordinator = AuroraCoordinator(hass, entry, device, connection, unit)
+    coordinator = AuroraCoordinator(hass, entry, device, connection)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
 

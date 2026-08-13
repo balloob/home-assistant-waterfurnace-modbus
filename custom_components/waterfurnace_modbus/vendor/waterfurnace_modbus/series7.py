@@ -94,8 +94,9 @@ class Series7:
         self.energy = Energy(unit)
         self.dealer = Dealer(unit)
         self.zones = tuple(Zone(unit, index=i) for i in range(1, MAX_ZONES + 1))
-        # Both settled by async_setup(), which needs the zone count off the device.
+        # All settled by async_setup(), which needs the zone count off the device.
         self.live_zones: tuple[Zone, ...] = ()
+        self._static: tuple[AuroraComponent, ...] = ()
         self._polled: dict[str, AuroraComponent] | None = None
 
     @property
@@ -132,13 +133,15 @@ class Series7:
         refuses those addresses outright is set up without it rather than never
         set up at all.
         """
-        await ComponentGroup(
-            self._unit, [self.info, self.config, self.peripherals]
-        ).async_update()
+        static: list[AuroraComponent] = [self.info, self.config, self.peripherals]
+        await ComponentGroup(self._unit, static).async_update()
         try:
             await self.dealer.async_update()
         except (IllegalDataAddressError, IllegalFunctionError):
             pass  # this unit does not serve the block; a transient error still raises
+        else:
+            static.append(self.dealer)
+        self._static = tuple(static)
         self.live_zones = self.zones[: self.config.number_of_zones or 0]
         # The poll list doubles as the setup marker: None means "not set up yet".
         self._polled = {name: getattr(self, name) for name in _POLLED}
@@ -173,3 +176,18 @@ class Series7:
         for name in updated:
             self._polled[name].notify()
         return UpdateReport(updated, failed)
+
+    async def async_read_raw(self) -> dict[str, dict[int, int | bool]]:
+        """Every register this device reads, undecoded — for diagnostics.
+
+        Covers the setup-only blocks as well as the polled ones, so a dump
+        carries the identity and installed-hardware registers an issue report
+        needs. Left out are the blocks this unit does not serve: the dealer
+        block where it refused those addresses, and the zones past
+        :attr:`live_zones`. The first call sets the device up.
+        """
+        if self._polled is None:
+            await self.async_setup()
+        assert self._polled is not None  # async_setup() builds it
+        group = ComponentGroup(self._unit, [*self._static, *self._polled.values()])
+        return await group.async_read_raw()

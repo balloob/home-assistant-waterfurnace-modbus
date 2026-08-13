@@ -6,6 +6,7 @@ entities reading a failed one go unavailable while the rest keep updating.
 
 from __future__ import annotations
 
+import pytest
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from modbus_connection import ModbusTimeoutError
@@ -67,6 +68,43 @@ async def test_a_failed_zone_leaves_the_other_zone_alone(
 
     assert hass.states.get("climate.ndv049a111_zone_2").state == STATE_UNAVAILABLE
     assert hass.states.get("climate.ndv049a111_zone_1").state != STATE_UNAVAILABLE
+
+
+async def test_a_failed_sub_system_is_logged_when_it_starts_failing(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_connection: ConnectionFactory,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A block that stays refused would otherwise log on every poll, forever."""
+    coordinator = config_entry.runtime_data
+    mock_connection.unit.fail_read(3000, ModbusTimeoutError("slow drive block"))
+
+    await coordinator.async_refresh()
+    assert "Failed to fetch compressor" in caplog.text
+
+    caplog.clear()
+    await coordinator.async_refresh()
+    assert "Failed to fetch compressor" not in caplog.text
+
+
+async def test_a_poll_that_answered_nothing_fails_with_a_reason(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_connection: ConnectionFactory,
+) -> None:
+    """Home Assistant logs only the message, so it has to name a real failure."""
+    coordinator = config_entry.runtime_data
+    mock_connection.unit.fail_requests(ModbusTimeoutError("no response"))
+
+    await coordinator.async_refresh()
+
+    assert not coordinator.last_update_success
+    err = coordinator.last_exception
+    assert "no response" in str(err)
+    # Every sub-system's error stays reachable behind the one that is quoted.
+    assert isinstance(err.__cause__, ExceptionGroup)
+    assert len(err.__cause__.exceptions) > 1
 
 
 async def test_entities_come_back_once_the_block_answers_again(

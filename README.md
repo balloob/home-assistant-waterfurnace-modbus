@@ -14,7 +14,7 @@ One Home Assistant device per heat pump, with:
 - **Energy sensors** — per-load power and geothermal heat of extraction/rejection, created only when the unit has the AXB energy-monitor package.
 - **Binary sensors** — compressor / blower / aux heat running, dehumidifying, lockout, emergency shutdown, pressure switches, load shed.
 - **Numbers** (disabled by default — installer settings) — the four ECM blower speed presets and the loop pump's minimum/maximum speed.
-- **Diagnostics download** — the live raw register map, which replays directly into the library's mock backend for hardware-free bug reproduction.
+- **Diagnostics download** — the last poll's outcome plus the live raw register map, which replays directly into the library's mock backend for hardware-free bug reproduction.
 
 ## Connecting
 
