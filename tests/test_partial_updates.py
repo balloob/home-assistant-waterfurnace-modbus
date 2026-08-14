@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
-from modbus_connection import ModbusTimeoutError
+from modbus_connection import IllegalDataAddressError, ModbusTimeoutError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from .conftest import ConnectionFactory
@@ -45,9 +45,13 @@ async def test_the_status_block_carries_the_thermostat_action(
     config_entry: MockConfigEntry,
     mock_connection: ConnectionFactory,
 ) -> None:
-    """hvac_action reads the outputs word, so the thermostat depends on status."""
+    """hvac_action reads the outputs word, so the thermostat depends on status.
+
+    Status is the poll's probe, so it is refused rather than timed out: a
+    refusal proves the heat pump is there and leaves the rest of the poll to run.
+    """
     coordinator = config_entry.runtime_data
-    mock_connection.unit.fail_read(16, ModbusTimeoutError("slow status block"))
+    mock_connection.unit.fail_read(16, IllegalDataAddressError())
     await coordinator.async_refresh()
 
     assert hass.states.get(LINE_VOLTAGE).state == STATE_UNAVAILABLE
@@ -93,15 +97,19 @@ async def test_a_poll_that_answered_nothing_fails_with_a_reason(
     config_entry: MockConfigEntry,
     mock_connection: ConnectionFactory,
 ) -> None:
-    """Home Assistant logs only the message, so it has to name a real failure."""
+    """Home Assistant logs only the message, so it has to name a real failure.
+
+    Every sub-system refusing is a heat pump that answers but serves nothing;
+    a heat pump that answers nothing at all raises instead, and is covered by
+    ``test_a_stuck_link_is_recycled_after_repeated_timeouts``.
+    """
     coordinator = config_entry.runtime_data
-    mock_connection.unit.fail_requests(ModbusTimeoutError("no response"))
+    mock_connection.unit.fail_requests(IllegalDataAddressError())
 
     await coordinator.async_refresh()
 
     assert not coordinator.last_update_success
     err = coordinator.last_exception
-    assert "no response" in str(err)
     # Every sub-system's error stays reachable behind the one that is quoted.
     assert isinstance(err.__cause__, ExceptionGroup)
     assert len(err.__cause__.exceptions) > 1

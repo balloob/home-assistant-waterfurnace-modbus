@@ -70,30 +70,33 @@ class AuroraCoordinator(DataUpdateCoordinator[UpdateReport]):
         """Refresh the polled sub-systems and report what got through.
 
         A link can go bad without dropping: the peer keeps the socket open
-        but stops answering. Since the sub-systems are read separately that
-        shows up as a poll where every one of them failed rather than as a
-        raised error, and after enough consecutive such polls the link is
-        recycled with ``disconnect()`` — not permanent like ``close()`` — so
-        the next poll opens a fresh one over the same handles.
+        but stops answering. The library raises ``ModbusTimeoutError`` for
+        exactly that — nothing on the unit answered at all — and after enough
+        consecutive such polls the link is recycled with ``disconnect()``, not
+        permanent like ``close()``, so the next poll opens a fresh one over the
+        same handles. A timeout the library *reports* instead means the unit is
+        answering, so it says nothing about the link and is not counted.
         """
         try:
             report = await self.device.async_update()
+        except ModbusTimeoutError as err:
+            self._consecutive_timeouts += 1
+            if self._consecutive_timeouts >= _STUCK_LINK_TIMEOUTS:
+                _LOGGER.warning(
+                    "No response in %s consecutive polls; recycling the connection",
+                    self._consecutive_timeouts,
+                )
+                self._consecutive_timeouts = 0
+                # The link is dropped even when the teardown itself errors.
+                with contextlib.suppress(ModbusError):
+                    await self._connection.disconnect()
+            raise UpdateFailed(f"The heat pump did not respond: {err}") from err
         except ModbusError as err:  # the link itself; a block never gets here
             raise UpdateFailed(f"Error reading the heat pump: {err}") from err
 
+        self._consecutive_timeouts = 0
         if report.failed and not report.updated:
             errors = list(report.failed.values())
-            if all(isinstance(err, ModbusTimeoutError) for err in errors):
-                self._consecutive_timeouts += 1
-                if self._consecutive_timeouts >= _STUCK_LINK_TIMEOUTS:
-                    _LOGGER.warning(
-                        "No response in %s consecutive polls; recycling the connection",
-                        self._consecutive_timeouts,
-                    )
-                    self._consecutive_timeouts = 0
-                    # The link is dropped even when the teardown itself errors.
-                    with contextlib.suppress(ModbusError):
-                        await self._connection.disconnect()
             # Home Assistant logs str(err) at error level and the traceback at
             # debug, so the message names a failure and the chained group keeps
             # the rest reachable.
@@ -101,7 +104,6 @@ class AuroraCoordinator(DataUpdateCoordinator[UpdateReport]):
                 f"The heat pump did not respond: {errors[0]}"
             ) from ExceptionGroup("every sub-system failed", errors)
 
-        self._consecutive_timeouts = 0
         for name in sorted(report.failed.keys() - self._failed):
             _LOGGER.warning("Failed to fetch %s: %s", name, report.failed[name])
         self._failed = frozenset(report.failed)

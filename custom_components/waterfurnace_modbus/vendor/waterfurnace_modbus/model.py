@@ -41,7 +41,9 @@ class UpdateReport:
     its attribute name. A failed component kept its previous values and did not
     notify; the error that failed it rides along. A dead link is never in here —
     the update raises ``ModbusConnectionError`` instead of reporting partial
-    silence.
+    silence — and neither is a unit that never answered at all, which raises
+    ``ModbusTimeoutError``. A timeout that *is* in here means the unit answered
+    something else, so only that block is slow.
     """
 
     updated: set[str]

@@ -127,3 +127,20 @@ async def test_a_stuck_link_is_recycled_after_repeated_timeouts(
     await coordinator.async_refresh()
     assert hass.states.get(entity_id).state == "50.0"
     assert len(mock_connection.connections) == 1
+
+
+async def test_one_slow_block_never_recycles_the_link(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_connection: ConnectionFactory,
+) -> None:
+    """A reported timeout means the heat pump answered, so the link is fine."""
+    coordinator = config_entry.runtime_data
+    connection = mock_connection.connections[-1]
+
+    mock_connection.unit.fail_read(3000, ModbusTimeoutError("slow drive block"))
+    for _ in range(5):
+        await coordinator.async_refresh()
+
+    assert coordinator.last_update_success
+    assert connection.connected

@@ -9,6 +9,7 @@ from modbus_connection import (
     IllegalFunctionError,
     ModbusConnectionError,
     ModbusError,
+    ModbusTimeoutError,
 )
 from modbus_connection.model import Component, ComponentGroup
 
@@ -35,6 +36,9 @@ MAX_ZONES = 6  # the IZ2 board supports up to six zones
 
 # Every fixed component attribute a poll may refresh, in read order. The live
 # zones are appended in async_setup(), keyed by their 1-based position.
+# Order matters: the first component read is the poll's probe, so it is status —
+# one block of the ABC's own core registers, the cheapest read on the device and
+# the one a working controller always answers.
 _POLLED = (
     "status",
     "sensors",
@@ -158,6 +162,11 @@ class Series7:
         rest still refresh. Listeners fire only after every sub-system has been
         tried, and only for the ones that refreshed. A failure of the link itself
         raises ``ModbusConnectionError`` instead of reporting.
+
+        A timeout before anything has answered raises ``ModbusTimeoutError``
+        rather than walking the remaining sub-systems into their own timeouts.
+        Containing a timeout is only right once the unit has proven it is there;
+        until then a silent unit would cost eleven timeouts instead of one.
         """
         if self._polled is None:
             await self.async_setup()
@@ -169,6 +178,10 @@ class Series7:
                 await component.async_update(notify=False)
             except ModbusConnectionError:
                 raise
+            except ModbusTimeoutError as err:
+                if not updated and not failed:
+                    raise  # nothing has answered yet: the whole unit is silent
+                failed[name] = err
             except ModbusError as err:
                 failed[name] = err
             else:
