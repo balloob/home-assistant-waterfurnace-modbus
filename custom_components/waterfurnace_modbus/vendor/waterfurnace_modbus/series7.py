@@ -185,9 +185,12 @@ class Series7:
         needs. Left out are the blocks this unit does not serve: the dealer
         block where it refused those addresses, and the zones past
         :attr:`live_zones`. The first call sets the device up.
+
+        The fields refresh but no listener fires: a dump is not a poll, and a
+        consumer's entities should not take a state from a diagnostics download.
         """
         if self._polled is None:
             await self.async_setup()
         assert self._polled is not None  # async_setup() builds it
         group = ComponentGroup(self._unit, [*self._static, *self._polled.values()])
-        return await group.async_read_raw()
+        return await group.async_read_raw(notify=False)
