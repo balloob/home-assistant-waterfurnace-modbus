@@ -14,7 +14,7 @@ dev = [
     # The vendored device library's only dependency; also provides the
     # in-memory MockModbusConnection the tests run against. The tmodbus extra
     # matches the manifest requirement, so connection.py imports at top level.
-    "modbus-connection[tmodbus]>=4.7.0",
+    "modbus-connection[tmodbus]>=4.8.1",
     # Real Home Assistant plus its custom-component test harness.
     "pytest-homeassistant-custom-component",
 ]
