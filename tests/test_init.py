@@ -104,7 +104,7 @@ async def test_a_stuck_link_is_recycled_after_repeated_timeouts(
     Polls are driven directly — the subject is the coordinator's timeout
     counting and recycle, not Home Assistant's refresh scheduling.
     """
-    coordinator = config_entry.runtime_data
+    coordinator = config_entry.runtime_data.readings
     connection = mock_connection.connections[-1]
     unit = mock_connection.unit
     entity_id = "sensor.ndv049a111_entering_water_temperature"
@@ -135,7 +135,7 @@ async def test_one_slow_block_never_recycles_the_link(
     mock_connection: ConnectionFactory,
 ) -> None:
     """A reported timeout means the heat pump answered, so the link is fine."""
-    coordinator = config_entry.runtime_data
+    coordinator = config_entry.runtime_data.readings
     connection = mock_connection.connections[-1]
 
     mock_connection.unit.fail_read(3000, ModbusTimeoutError("slow drive block"))

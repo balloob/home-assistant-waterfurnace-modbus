@@ -18,7 +18,6 @@ from .model import AuroraComponent, temperature
 class Thermostat(AuroraComponent):
     """Communicating-thermostat setpoints, operating mode and fan mode."""
 
-    ambient_temperature = temperature(502)
     heating_setpoint = temperature(745)  # read; written via 12619
     cooling_setpoint = temperature(746)  # read; written via 12620
 

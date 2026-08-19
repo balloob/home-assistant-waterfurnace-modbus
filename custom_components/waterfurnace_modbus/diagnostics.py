@@ -19,7 +19,7 @@ async def async_get_config_entry_diagnostics(
     (``load_raw``), so an attached diagnostics file can back a regression
     test with no hardware.
     """
-    coordinator = entry.runtime_data
+    coordinator = entry.runtime_data.readings
     # The whole map — including the identity and installed-hardware registers
     # the coordinator reads only once — freshly read at download time.
     try:

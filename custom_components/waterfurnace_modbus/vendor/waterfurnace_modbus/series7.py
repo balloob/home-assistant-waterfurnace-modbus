@@ -20,6 +20,7 @@ from .dealer import Dealer
 from .device_info import DeviceInformation
 from .dhw import DHW
 from .energy import Energy
+from .enums import SystemOutput
 from .humidistat import Humidistat
 from .model import AuroraComponent, UpdateReport
 from .peripherals import Peripherals
@@ -39,17 +40,25 @@ MAX_ZONES = 6  # the IZ2 board supports up to six zones
 # Order matters: the first component read is the poll's probe, so it is status —
 # one block of the ABC's own core registers, the cheapest read on the device and
 # the one a working controller always answers.
-_POLLED = (
+# What moves on its own, and what moves only when something writes it. A
+# consumer polls the readings on its own interval and the settings rarely.
+_READINGS = (
     "status",
     "sensors",
     "compressor",
     "blower",
     "pump",
     "dhw",
-    "thermostat",
-    "humidistat",
     "energy",
 )
+
+_SETTINGS = ("thermostat", "humidistat")
+
+# Btu per watt-hour, for putting electrical input and thermal output in one unit.
+_BTU_PER_WATT_HOUR = 3.412
+
+# A COP outside this is a bad register rather than a heat pump.
+_COP_PLAUSIBLE = (0.5, 15.0)
 
 
 class Series7:
@@ -101,7 +110,8 @@ class Series7:
         # All settled by async_setup(), which needs the zone count off the device.
         self.live_zones: tuple[Zone, ...] = ()
         self._static: tuple[AuroraComponent, ...] = ()
-        self._polled: dict[str, AuroraComponent] | None = None
+        self._readings: dict[str, AuroraComponent] | None = None
+        self._settings: dict[str, AuroraComponent] = {}
 
     @property
     def components(self) -> tuple[Component, ...]:
@@ -122,6 +132,83 @@ class Series7:
             self.dealer,
             *self.zones,
         )
+
+    @property
+    def water_delta_t(self) -> float | None:
+        """How much the loop water changed across the coax, in °F.
+
+        Unsigned: the unit takes heat out of the loop in heating and puts it
+        back in cooling, and the size is what says how hard it is working.
+        """
+        leaving = self.sensors.leaving_water
+        entering = self.sensors.entering_water
+        if leaving is None or entering is None:
+            return None
+        return abs(leaving - entering)
+
+    @property
+    def cop(self) -> float | None:
+        """Coefficient of performance: useful heat out over electricity in.
+
+        The Aurora names its heat registers from the ground loop's side, so
+        which one carries the useful figure depends on the reversing valve.
+        Energy is conserved either way: heating delivers what came out of the
+        ground *plus* the compressor's work, cooling removes what went into the
+        ground *minus* it.
+
+        0.0 with the compressor off, and None when the unit reports nothing to
+        divide, or a figure outside :data:`_COP_PLAUSIBLE` — a reading that far
+        out is a bad register, not a heat pump.
+        """
+        outputs = self.status.outputs
+        if outputs is None:
+            return None
+        if not (SystemOutput.COMPRESSOR_1 | SystemOutput.COMPRESSOR_2) & outputs:
+            return 0.0
+
+        watts = self.energy.total_power
+        if not watts:
+            return None
+
+        cooling = SystemOutput.REVERSING_VALVE in outputs
+        ground = (
+            self.energy.heat_of_rejection if cooling else self.energy.heat_of_extraction
+        )
+        if ground is None:
+            return None
+
+        work = watts * _BTU_PER_WATT_HOUR
+        useful = abs(ground) - work if cooling else abs(ground) + work
+        if useful <= 0:
+            return None
+        value = useful / work
+        low, high = _COP_PLAUSIBLE
+        return value if low <= value <= high else None
+
+    @property
+    def approach_temperature(self) -> float | None:
+        """How far the condenser sits above what it is rejecting heat into.
+
+        The condenser is the water coax in cooling and the indoor air coil in
+        heating, so the reference changes with the reversing valve. None with
+        the compressor off, and in heating on a unit without the AXB board,
+        which is what reports supply air.
+        """
+        outputs = self.status.outputs
+        if outputs is None:
+            return None
+        if not (SystemOutput.COMPRESSOR_1 | SystemOutput.COMPRESSOR_2) & outputs:
+            return None
+
+        condenser = self.compressor.saturated_condenser_temperature
+        if condenser is None:
+            return None
+
+        cooling = SystemOutput.REVERSING_VALVE in outputs
+        reference = self.sensors.entering_water if cooling else self.sensors.leaving_air
+        if reference is None:
+            return None
+        return condenser - reference
 
     async def async_setup(self) -> None:
         """Read what cannot change while the unit runs, and settle what to poll.
@@ -147,12 +234,52 @@ class Series7:
             static.append(self.dealer)
         self._static = tuple(static)
         self.live_zones = self.zones[: self.config.number_of_zones or 0]
+
+        # Return air sits at a different register with and without the AXB
+        # board, which also serves supply air at all.
+        self.sensors.has_axb = bool(self.peripherals.has_axb)
+
         # The poll list doubles as the setup marker: None means "not set up yet".
-        self._polled = {name: getattr(self, name) for name in _POLLED}
-        self._polled.update(
+        self._readings = {name: getattr(self, name) for name in _READINGS}
+        self._readings.update(
             (f"zone_{index}", zone)
             for index, zone in enumerate(self.live_zones, start=1)
         )
+
+        # A humidistat the unit cannot act on reports targets nothing honours.
+        await self.humidistat.async_update()
+        self._settings = {name: getattr(self, name) for name in _SETTINGS}
+        if not self._has_humidistat():
+            del self._settings["humidistat"]
+
+    def _has_humidistat(self) -> bool:
+        """Whether this unit can actually humidify or dehumidify.
+
+        A unit with neither, and no Symphony link to drive them, still answers
+        the registers, so the targets would read as settings nothing honours.
+        """
+        return bool(
+            self.humidistat.auto_humidification
+            or self.humidistat.auto_dehumidification
+            or self.peripherals.has_awl
+        )
+
+    async def async_update_readings(self) -> UpdateReport:
+        """Refresh what the unit measures and controls on its own."""
+        if self._readings is None:
+            await self.async_setup()
+        assert self._readings is not None  # async_setup() builds it
+        return await self._async_poll(self._readings)
+
+    async def async_update_settings(self) -> UpdateReport:
+        """Refresh what someone configured: setpoints, modes, humidity targets.
+
+        These move when something writes them, so a consumer polls them on a
+        slower interval than the readings, and again after writing one.
+        """
+        if self._readings is None:
+            await self.async_setup()
+        return await self._async_poll(self._settings)
 
     async def async_update(self) -> UpdateReport:
         """Refresh every polled sub-system, one at a time.
@@ -168,12 +295,16 @@ class Series7:
         Containing a timeout is only right once the unit has proven it is there;
         until then a silent unit would cost eleven timeouts instead of one.
         """
-        if self._polled is None:
+        if self._readings is None:
             await self.async_setup()
-        assert self._polled is not None  # async_setup() builds it
+        assert self._readings is not None  # async_setup() builds it
+        return await self._async_poll({**self._readings, **self._settings})
+
+    async def _async_poll(self, polled: dict[str, AuroraComponent]) -> UpdateReport:
+        """Read each sub-system on its own, collecting what happened."""
         updated: set[str] = set()
         failed: dict[str, ModbusError] = {}
-        for name, component in self._polled.items():
+        for name, component in polled.items():
             try:
                 await component.async_update(notify=False)
             except ModbusConnectionError:
@@ -187,7 +318,7 @@ class Series7:
             else:
                 updated.add(name)
         for name in updated:
-            self._polled[name].notify()
+            polled[name].notify()
         return UpdateReport(updated, failed)
 
     async def async_read_raw(self) -> dict[str, dict[int, int | bool]]:
@@ -202,8 +333,11 @@ class Series7:
         The fields refresh but no listener fires: a dump is not a poll, and a
         consumer's entities should not take a state from a diagnostics download.
         """
-        if self._polled is None:
+        if self._readings is None:
             await self.async_setup()
-        assert self._polled is not None  # async_setup() builds it
-        group = ComponentGroup(self._unit, [*self._static, *self._polled.values()])
+        assert self._readings is not None  # async_setup() builds it
+        group = ComponentGroup(
+            self._unit,
+            [*self._static, *self._readings.values(), *self._settings.values()],
+        )
         return await group.async_read_raw(notify=False)

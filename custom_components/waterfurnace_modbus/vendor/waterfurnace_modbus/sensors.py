@@ -20,10 +20,15 @@ from .model import AuroraComponent, temperature
 class Sensors(AuroraComponent):
     """Controller-wide air and water temperature inputs."""
 
-    entering_air = temperature(740)  # return-air temperature into the unit
-    leaving_air = temperature(900)  # supply-air temperature out of the unit
+    # Return air is at 740 on a unit with the AXB board and at 567 without it,
+    # and only the AXB serves supply air at all. async_setup() drops whichever
+    # this unit does not have, so the surviving one is what these read.
+    _entering_air_axb = temperature(740)
+    _entering_air_legacy = temperature(567)
+    _leaving_air = temperature(900)
     entering_water = temperature(1111)  # loop water into the unit
     leaving_water = temperature(1110)  # loop water out of the unit
+    ambient_air = temperature(502)  # the thermostat's own room sensor
     _outdoor = temperature(742)  # outdoor sensor (communicating stat/AWL)
     relative_humidity = integer(741, signed=False, unit="%")
     air_coil = temperature(20)  # FP2 refrigerant-to-air coil
@@ -39,3 +44,20 @@ class Sensors(AuroraComponent):
         component both accept for the same reason.
         """
         return None if self._outdoor == 0 else self._outdoor
+
+    #: Whether the AXB board is installed; ``Series7.async_setup()`` settles it.
+    has_axb: bool = True
+
+    @property
+    def entering_air(self) -> float | None:
+        """Return-air temperature into the unit.
+
+        The AXB board reports it at 740 and a unit without one at 567, so which
+        register means anything depends on the hardware.
+        """
+        return self._entering_air_axb if self.has_axb else self._entering_air_legacy
+
+    @property
+    def leaving_air(self) -> float | None:
+        """Supply-air temperature out of the unit; None without an AXB board."""
+        return self._leaving_air if self.has_axb else None

@@ -13,12 +13,18 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from modbus_connection import ModbusError
 
 from . import connection as connection_module
-from .const import CONF_UNIT_ID, DEFAULT_UNIT_ID
-from .coordinator import AuroraConfigEntry, AuroraCoordinator
+from .const import (
+    CONF_UNIT_ID,
+    DEFAULT_UNIT_ID,
+    SCAN_INTERVAL,
+    SETTINGS_SCAN_INTERVAL,
+)
+from .coordinator import AuroraConfigEntry, AuroraCoordinator, AuroraData
 from .vendor.waterfurnace_modbus import Series7
 
 PLATFORMS = [
     Platform.BINARY_SENSOR,
+    Platform.BUTTON,
     Platform.CLIMATE,
     Platform.NUMBER,
     Platform.SENSOR,
@@ -45,9 +51,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: AuroraConfigEntry) -> bo
     except ModbusError as err:
         raise ConfigEntryNotReady(f"Could not read the heat pump: {err}") from err
 
-    coordinator = AuroraCoordinator(hass, entry, device, connection)
-    await coordinator.async_config_entry_first_refresh()
-    entry.runtime_data = coordinator
+    # Two polls: what the unit measures, and what someone configured. Only the
+    # fast one recycles a stuck link, so the slow one cannot drop the link
+    # under a poll already in flight.
+    readings = AuroraCoordinator(
+        hass,
+        entry,
+        device,
+        connection,
+        device.async_update_readings,
+        SCAN_INTERVAL,
+        recycle_link=True,
+    )
+    settings = AuroraCoordinator(
+        hass,
+        entry,
+        device,
+        connection,
+        device.async_update_settings,
+        SETTINGS_SCAN_INTERVAL,
+    )
+    await readings.async_config_entry_first_refresh()
+    await settings.async_config_entry_first_refresh()
+    entry.runtime_data = AuroraData(readings, settings)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True

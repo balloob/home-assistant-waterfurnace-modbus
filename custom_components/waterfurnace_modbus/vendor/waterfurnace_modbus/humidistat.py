@@ -9,16 +9,13 @@ active dehumidification is currently running.
 
 from __future__ import annotations
 
-from modbus_connection.model import bit, bits, boolean
+from modbus_connection.model import bit, bits
 
 from .model import AuroraComponent
 
 
 class Humidistat(AuroraComponent):
     """Humidification and dehumidification modes and targets."""
-
-    active_dehumidification = boolean(362)
-    """Whether dehumidification is running right now."""
 
     auto_humidification = bit(12309, 15)
     """Whether automatic humidification is enabled."""

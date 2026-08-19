@@ -58,7 +58,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the thermostat, and a zone entity per reported IZ2 zone."""
-    coordinator = entry.runtime_data
+    coordinator = entry.runtime_data.readings
     entities: list[ClimateEntity] = [AuroraThermostat(coordinator)]
     entities.extend(
         AuroraZone(coordinator, zone, index)
@@ -193,6 +193,11 @@ class AuroraThermostat(AuroraClimate):
         """Initialize the thermostat entity."""
         # hvac_action reads the controller's outputs, not the thermostat block.
         super().__init__(coordinator, "thermostat", components=("thermostat", "status"))
+
+    @property
+    def current_temperature(self) -> float | None:
+        """Ambient at the thermostat, which reports it with the measurements."""
+        return self.coordinator.device.sensors.ambient_air
 
     @property
     def _component(self) -> Thermostat:

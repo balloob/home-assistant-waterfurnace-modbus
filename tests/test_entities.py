@@ -180,3 +180,30 @@ async def test_water_heater_reflects_and_controls_dhw(
         blocking=True,
     )
     assert (await unit.read_holding_registers(400, 1))[0] == 0
+
+
+async def test_derived_sensors(
+    hass: HomeAssistant, config_entry: MockConfigEntry
+) -> None:
+    """Values computed across sub-systems, not read from one register."""
+    assert hass.states.get("sensor.ndv049a111_water_delta_t").state == "5.0"
+    # Heating: 18000 Btuh out of the ground plus the compressor's own work.
+    assert float(
+        hass.states.get("sensor.ndv049a111_coefficient_of_performance").state
+    ) == pytest.approx(2.898, abs=0.01)
+
+
+async def test_clear_fault_history_button(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_connection: ConnectionFactory,
+) -> None:
+    """Pressing it writes the controller's magic word."""
+    await hass.services.async_call(
+        "button",
+        "press",
+        {"entity_id": "button.ndv049a111_clear_fault_history"},
+        blocking=True,
+    )
+
+    assert mock_connection.unit.holding[47] == 0x5555
