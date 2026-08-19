@@ -7,7 +7,7 @@ entities reading a failed one go unavailable while the rest keep updating.
 from __future__ import annotations
 
 import pytest
-from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from modbus_connection import IllegalDataAddressError, ModbusTimeoutError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -132,3 +132,23 @@ async def test_entities_come_back_once_the_block_answers_again(
     unit.holding[3001] = 8
     await coordinator.async_refresh()
     assert hass.states.get(COMPRESSOR_SPEED).state == "8"
+
+
+async def test_absent_readings_report_unknown(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_connection: ConnectionFactory,
+) -> None:
+    """A reading the unit does not have is unknown, not a plausible number."""
+    coordinator = config_entry.runtime_data
+    unit = mock_connection.unit
+
+    unit.holding[1119] = 0xD8F1  # no loop pressure transducer fitted
+    unit.holding[742] = 0  # not AWL-communicating, so no outdoor sensor
+    await coordinator.async_refresh()
+
+    assert hass.states.get("sensor.ndv049a111_loop_pressure").state == STATE_UNKNOWN
+    assert (
+        hass.states.get("sensor.ndv049a111_outdoor_temperature").state == STATE_UNKNOWN
+    )
+    assert coordinator.last_update_success  # the poll itself is fine

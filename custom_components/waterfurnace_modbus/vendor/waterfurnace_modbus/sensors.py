@@ -24,7 +24,18 @@ class Sensors(AuroraComponent):
     leaving_air = temperature(900)  # supply-air temperature out of the unit
     entering_water = temperature(1111)  # loop water into the unit
     leaving_water = temperature(1110)  # loop water out of the unit
-    outdoor = temperature(742)  # outdoor sensor (communicating stat/AWL)
+    _outdoor = temperature(742)  # outdoor sensor (communicating stat/AWL)
     relative_humidity = integer(741, signed=False, unit="%")
     air_coil = temperature(20)  # FP2 refrigerant-to-air coil
     cooling_liquid_line = temperature(19)  # FP1 refrigerant liquid line
+
+    @property
+    def outdoor(self) -> float | None:
+        """Outdoor air temperature, or None when the unit is not AWL-linked.
+
+        The register reads exactly 0 unless the system is AWL-communicating, so
+        a unit without Symphony reports a permanent, plausible 0 °F. That costs
+        a genuine 0 °F reading, which the upstream Ruby gem and the ESPHome
+        component both accept for the same reason.
+        """
+        return None if self._outdoor == 0 else self._outdoor
