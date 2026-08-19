@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from modbus_connection.model import bit, bits, flags, integer
+from modbus_connection.model import bit, bits, boolean, flags, integer
 
 from .enums import SystemOutput, SystemStatus
 from .model import AuroraComponent
 from .utils import fault_name
+
+# The word the controller acts on to wipe its fault history (register 47).
+_CLEAR_FAULT_HISTORY = 0x5555
 
 
 class Status(AuroraComponent):
@@ -14,6 +17,7 @@ class Status(AuroraComponent):
 
     outputs = flags(30, SystemOutput)  # compressor / blower / aux / lockout / alarm
     inputs = flags(31, SystemStatus)  # thermostat calls + pressure switches
+    active_dehumidification = boolean(362)
     line_voltage = integer(16, signed=False, unit="V")
     line_voltage_setting = integer(112, signed=False, writable=True, unit="V")
 
@@ -25,6 +29,10 @@ class Status(AuroraComponent):
     _fault_code = bits(25, 0, 15)
     _lockout_latched = bit(26, 15)
     _lockout_code = bits(26, 0, 15)
+
+    # Writing the magic word clears the stored fault history; the register reads
+    # back as something else, so only the write means anything.
+    _clear_fault_history_cmd = integer(47, signed=False, writable=True)
 
     @property
     def aux_heat_stage(self) -> int | None:
@@ -87,3 +95,11 @@ class Status(AuroraComponent):
         if not 90 <= volts <= 635:
             raise ValueError("line voltage setting must be between 90 and 635 V")
         await self.write("line_voltage_setting", volts)
+
+    async def async_clear_fault_history(self) -> None:
+        """Clear the controller's stored fault history.
+
+        A command, not a setting: the controller acts on the magic word and
+        keeps nothing that reads back as "cleared".
+        """
+        await self.write("_clear_fault_history_cmd", _CLEAR_FAULT_HISTORY)

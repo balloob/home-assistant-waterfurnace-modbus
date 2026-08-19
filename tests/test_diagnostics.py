@@ -37,7 +37,7 @@ async def test_diagnostics_name_the_sub_system_that_failed(
     mock_connection: ConnectionFactory,
 ) -> None:
     """Which sub-system was stale is the first thing to look at in a report."""
-    coordinator = config_entry.runtime_data
+    coordinator = config_entry.runtime_data.readings
     mock_connection.unit.fail_read(3000, ModbusTimeoutError("slow drive block"))
     await coordinator.async_refresh()
 

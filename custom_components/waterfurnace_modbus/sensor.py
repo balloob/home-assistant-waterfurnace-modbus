@@ -73,6 +73,27 @@ def _power(
 
 
 SENSORS: tuple[AuroraSensorDescription, ...] = (
+    # -- derived: computed across sub-systems, not read from one register --
+    AuroraSensorDescription(
+        key="water_delta_t",
+        translation_key="water_delta_t",
+        component="sensors",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.FAHRENHEIT,
+        suggested_display_precision=1,
+        value_fn=lambda d: d.water_delta_t,
+    ),
+    AuroraSensorDescription(
+        key="approach_temperature",
+        translation_key="approach_temperature",
+        component="compressor",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.FAHRENHEIT,
+        suggested_display_precision=1,
+        value_fn=lambda d: d.approach_temperature,
+    ),
     # -- water loop --
     _temperature("entering_water", "sensors", lambda d: d.sensors.entering_water),
     _temperature("leaving_water", "sensors", lambda d: d.sensors.leaving_water),
@@ -192,6 +213,14 @@ SENSORS: tuple[AuroraSensorDescription, ...] = (
 # Populated only with the AXB energy-monitor package; without it these
 # registers read 0, which would show as a wall of zero-watt sensors.
 ENERGY_SENSORS: tuple[AuroraSensorDescription, ...] = (
+    AuroraSensorDescription(
+        key="cop",
+        translation_key="cop",
+        component="energy",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        value_fn=lambda d: d.cop,
+    ),
     _power("total_power", lambda d: d.energy.total_power),
     _power("compressor_power", lambda d: d.energy.compressor_power),
     _power("blower_power", lambda d: d.energy.blower_power),
@@ -242,12 +271,13 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the sensors the installed hardware supports."""
-    coordinator = entry.runtime_data
+    data = entry.runtime_data
     descriptions = list(SENSORS)
-    if coordinator.device.config.energy_monitor is EnergyMonitorType.ENERGY_MONITOR:
+    if data.readings.device.config.energy_monitor is EnergyMonitorType.ENERGY_MONITOR:
         descriptions.extend(ENERGY_SENSORS)
     async_add_entities(
-        AuroraSensor(coordinator, description) for description in descriptions
+        AuroraSensor(data.for_components((description.component,)), description)
+        for description in descriptions
     )
 
 

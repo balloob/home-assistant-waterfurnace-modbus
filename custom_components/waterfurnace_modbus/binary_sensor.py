@@ -58,9 +58,9 @@ BINARY_SENSORS: tuple[AuroraBinarySensorDescription, ...] = (
     AuroraBinarySensorDescription(
         key="active_dehumidification",
         translation_key="active_dehumidification",
-        component="humidistat",
+        component="status",
         device_class=BinarySensorDeviceClass.RUNNING,
-        value_fn=lambda d: d.humidistat.active_dehumidification,
+        value_fn=lambda d: d.status.active_dehumidification,
     ),
     AuroraBinarySensorDescription(
         key="locked_out",
@@ -118,7 +118,9 @@ async def async_setup_entry(
 ) -> None:
     """Set up the binary sensors."""
     async_add_entities(
-        AuroraBinarySensor(entry.runtime_data, description)
+        AuroraBinarySensor(
+            entry.runtime_data.for_components((description.component,)), description
+        )
         for description in BINARY_SENSORS
     )
 

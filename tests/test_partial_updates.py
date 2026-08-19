@@ -27,7 +27,7 @@ async def test_a_failed_sub_system_only_blanks_its_own_entities(
     mock_connection: ConnectionFactory,
 ) -> None:
     """Register 3000 is the VS drive's block; nothing else is read from it."""
-    coordinator = config_entry.runtime_data
+    coordinator = config_entry.runtime_data.readings
     unit = mock_connection.unit
     assert hass.states.get(COMPRESSOR_SPEED).state == "5"
 
@@ -50,7 +50,7 @@ async def test_the_status_block_carries_the_thermostat_action(
     Status is the poll's probe, so it is refused rather than timed out: a
     refusal proves the heat pump is there and leaves the rest of the poll to run.
     """
-    coordinator = config_entry.runtime_data
+    coordinator = config_entry.runtime_data.readings
     mock_connection.unit.fail_read(16, IllegalDataAddressError())
     await coordinator.async_refresh()
 
@@ -66,7 +66,7 @@ async def test_a_failed_zone_leaves_the_other_zone_alone(
     mock_connection: ConnectionFactory,
 ) -> None:
     """Zone entities are numbered the way the report keys the zones."""
-    coordinator = config_entry.runtime_data
+    coordinator = config_entry.runtime_data.readings
     mock_connection.unit.fail_read(31010, ModbusTimeoutError("slow zone 2"))
     await coordinator.async_refresh()
 
@@ -81,7 +81,7 @@ async def test_a_failed_sub_system_is_logged_when_it_starts_failing(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A block that stays refused would otherwise log on every poll, forever."""
-    coordinator = config_entry.runtime_data
+    coordinator = config_entry.runtime_data.readings
     mock_connection.unit.fail_read(3000, ModbusTimeoutError("slow drive block"))
 
     await coordinator.async_refresh()
@@ -103,7 +103,7 @@ async def test_a_poll_that_answered_nothing_fails_with_a_reason(
     a heat pump that answers nothing at all raises instead, and is covered by
     ``test_a_stuck_link_is_recycled_after_repeated_timeouts``.
     """
-    coordinator = config_entry.runtime_data
+    coordinator = config_entry.runtime_data.readings
     mock_connection.unit.fail_requests(IllegalDataAddressError())
 
     await coordinator.async_refresh()
@@ -121,7 +121,7 @@ async def test_entities_come_back_once_the_block_answers_again(
     mock_connection: ConnectionFactory,
 ) -> None:
     """A failed sub-system is a per-poll verdict, not a latch."""
-    coordinator = config_entry.runtime_data
+    coordinator = config_entry.runtime_data.readings
     unit = mock_connection.unit
 
     unit.fail_read(3000, ModbusTimeoutError("slow drive block"))
@@ -140,7 +140,7 @@ async def test_absent_readings_report_unknown(
     mock_connection: ConnectionFactory,
 ) -> None:
     """A reading the unit does not have is unknown, not a plausible number."""
-    coordinator = config_entry.runtime_data
+    coordinator = config_entry.runtime_data.readings
     unit = mock_connection.unit
 
     unit.holding[1119] = 0xD8F1  # no loop pressure transducer fitted

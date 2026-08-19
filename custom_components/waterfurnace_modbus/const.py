@@ -27,3 +27,10 @@ DEFAULT_PARITY: Final = "e"
 DEFAULT_UNIT_ID: Final = 1
 
 SCAN_INTERVAL: Final = timedelta(seconds=30)
+
+# Setpoints, modes and humidity targets move when something writes them, so
+# they are polled far more rarely than what the unit measures.
+SETTINGS_SCAN_INTERVAL = timedelta(minutes=5)
+
+# The library sub-systems that carry those settings.
+SETTINGS_COMPONENTS = frozenset({"thermostat", "humidistat"})

@@ -115,7 +115,10 @@ async def async_setup_entry(
 ) -> None:
     """Set up the installer-setting numbers."""
     async_add_entities(
-        AuroraNumber(entry.runtime_data, description) for description in NUMBERS
+        AuroraNumber(
+            entry.runtime_data.for_components((description.component,)), description
+        )
+        for description in NUMBERS
     )
 
 

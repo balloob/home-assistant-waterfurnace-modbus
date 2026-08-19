@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import contextlib
 import logging
+from collections.abc import Awaitable, Callable, Iterable
+from dataclasses import dataclass
+from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -13,7 +16,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 from modbus_connection import ModbusConnection, ModbusError, ModbusTimeoutError
 
-from .const import DOMAIN, SCAN_INTERVAL
+from .const import DOMAIN, SETTINGS_COMPONENTS
 from .vendor.waterfurnace_modbus import Series7, UpdateReport
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,7 +26,23 @@ _LOGGER = logging.getLogger(__name__)
 # RTU-over-TCP bridges are prone to — and recycled with disconnect().
 _STUCK_LINK_TIMEOUTS = 3
 
-type AuroraConfigEntry = ConfigEntry[AuroraCoordinator]
+type AuroraConfigEntry = ConfigEntry[AuroraData]
+
+
+@dataclass
+class AuroraData:
+    """The two polls a config entry runs, on their own intervals."""
+
+    readings: AuroraCoordinator
+    settings: AuroraCoordinator
+
+    def for_components(self, components: Iterable[str]) -> AuroraCoordinator:
+        """The coordinator that refreshes these sub-systems."""
+        return (
+            self.settings
+            if any(name in SETTINGS_COMPONENTS for name in components)
+            else self.readings
+        )
 
 
 class AuroraCoordinator(DataUpdateCoordinator[UpdateReport]):
@@ -51,16 +70,27 @@ class AuroraCoordinator(DataUpdateCoordinator[UpdateReport]):
         entry: AuroraConfigEntry,
         device: Series7,
         connection: ModbusConnection,
+        poll: Callable[[], Awaitable[UpdateReport]],
+        interval: timedelta,
+        *,
+        recycle_link: bool = False,
     ) -> None:
-        """Initialize the coordinator over a device that has been set up."""
+        """Initialize the coordinator over a device that has been set up.
+
+        ``recycle_link`` belongs to the fastest poll only: a second one
+        dropping the link under a poll already in flight is the failure the
+        recycling is there to prevent.
+        """
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
             config_entry=entry,
-            update_interval=SCAN_INTERVAL,
+            update_interval=interval,
         )
         self.device = device
+        self._poll = poll
+        self._recycle_link = recycle_link
         self._connection = connection
         self._consecutive_timeouts = 0
         # The zones the IZ2 board reported during setup; one entity set each.
@@ -78,10 +108,11 @@ class AuroraCoordinator(DataUpdateCoordinator[UpdateReport]):
         answering, so it says nothing about the link and is not counted.
         """
         try:
-            report = await self.device.async_update()
+            report = await self._poll()
         except ModbusTimeoutError as err:
             self._consecutive_timeouts += 1
-            if self._consecutive_timeouts >= _STUCK_LINK_TIMEOUTS:
+            stuck = self._consecutive_timeouts >= _STUCK_LINK_TIMEOUTS
+            if self._recycle_link and stuck:
                 _LOGGER.warning(
                     "No response in %s consecutive polls; recycling the connection",
                     self._consecutive_timeouts,

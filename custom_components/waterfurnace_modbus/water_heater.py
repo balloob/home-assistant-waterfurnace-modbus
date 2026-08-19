@@ -25,7 +25,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the DHW entity when the unit has an AXB board."""
-    coordinator = entry.runtime_data
+    coordinator = entry.runtime_data.readings
     if coordinator.device.peripherals.has_axb:
         async_add_entities([AuroraWaterHeater(coordinator)])
 

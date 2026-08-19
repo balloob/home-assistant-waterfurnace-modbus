@@ -188,11 +188,25 @@
       },
       "blower_amps": {
         "name": "Blower current"
+      },
+      "water_delta_t": {
+        "name": "Water delta-T"
+      },
+      "approach_temperature": {
+        "name": "Approach temperature"
+      },
+      "cop": {
+        "name": "Coefficient of performance"
       }
     },
     "water_heater": {
       "dhw": {
         "name": "Hot water"
+      }
+    },
+    "button": {
+      "clear_fault_history": {
+        "name": "Clear fault history"
       }
     }
   }
