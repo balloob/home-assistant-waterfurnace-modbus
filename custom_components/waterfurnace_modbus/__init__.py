@@ -58,7 +58,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AuroraConfigEntry) -> bo
         hass,
         entry,
         device,
-        connection,
+        unit,
         device.async_update_readings,
         SCAN_INTERVAL,
         recycle_link=True,
@@ -67,7 +67,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: AuroraConfigEntry) -> bo
         hass,
         entry,
         device,
-        connection,
+        unit,
         device.async_update_settings,
         SETTINGS_SCAN_INTERVAL,
     )

@@ -14,7 +14,7 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
-from modbus_connection import ModbusConnection, ModbusError, ModbusTimeoutError
+from modbus_connection import ModbusError, ModbusTimeoutError, ModbusUnit
 
 from .const import DOMAIN, SETTINGS_COMPONENTS
 from .vendor.waterfurnace_modbus import Series7, UpdateReport
@@ -69,13 +69,17 @@ class AuroraCoordinator(DataUpdateCoordinator[UpdateReport]):
         hass: HomeAssistant,
         entry: AuroraConfigEntry,
         device: Series7,
-        connection: ModbusConnection,
+        unit: ModbusUnit,
         poll: Callable[[], Awaitable[UpdateReport]],
         interval: timedelta,
         *,
         recycle_link: bool = False,
     ) -> None:
         """Initialize the coordinator over a device that has been set up.
+
+        The link is recycled through ``unit``, not through the connection: a
+        handle can drop a wedged link but cannot ``close()`` it, so this works
+        just as well on a unit handed out by someone else.
 
         ``recycle_link`` belongs to the fastest poll only: a second one
         dropping the link under a poll already in flight is the failure the
@@ -91,7 +95,7 @@ class AuroraCoordinator(DataUpdateCoordinator[UpdateReport]):
         self.device = device
         self._poll = poll
         self._recycle_link = recycle_link
-        self._connection = connection
+        self._unit = unit
         self._consecutive_timeouts = 0
         # The zones the IZ2 board reported during setup; one entity set each.
         self.zones = device.live_zones
@@ -120,7 +124,7 @@ class AuroraCoordinator(DataUpdateCoordinator[UpdateReport]):
                 self._consecutive_timeouts = 0
                 # The link is dropped even when the teardown itself errors.
                 with contextlib.suppress(ModbusError):
-                    await self._connection.disconnect()
+                    await self._unit.disconnect()
             raise UpdateFailed(f"The heat pump did not respond: {err}") from err
         except ModbusError as err:  # the link itself; a block never gets here
             raise UpdateFailed(f"Error reading the heat pump: {err}") from err
