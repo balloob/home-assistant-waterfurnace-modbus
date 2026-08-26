@@ -62,6 +62,8 @@ class AuroraCoordinator(DataUpdateCoordinator[UpdateReport]):
     on the next request, so the next successful poll brings the entities back.
     """
 
+    config_entry: AuroraConfigEntry
+
     _failed: frozenset[str] = frozenset()
 
     def __init__(

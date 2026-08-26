@@ -104,11 +104,6 @@ class AuroraClimate(AuroraEntity, ClimateEntity):
         return features | ClimateEntityFeature.TARGET_TEMPERATURE
 
     @property
-    def current_temperature(self) -> float | None:
-        """Ambient at this thermostat or zone."""
-        return self._component.ambient_temperature
-
-    @property
     def hvac_mode(self) -> HVACMode | None:
         """The operating mode, with EHEAT folded into heating."""
         mode = self._component.mode
@@ -242,6 +237,11 @@ class AuroraZone(AuroraClimate):
         super().__init__(coordinator, f"zone_{index}", components=(f"zone_{index}",))
         self._zone = zone
         self._attr_translation_placeholders = {"zone": str(index)}
+
+    @property
+    def current_temperature(self) -> float | None:
+        """Ambient at this zone's sensor."""
+        return self._component.ambient_temperature
 
     @property
     def _component(self) -> Zone:
