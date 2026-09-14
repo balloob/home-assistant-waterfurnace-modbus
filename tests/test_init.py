@@ -28,7 +28,9 @@ async def test_setup_creates_the_device(
     """One heat pump becomes one device with its Modbus-read identity."""
     assert config_entry.state is ConfigEntryState.LOADED
 
-    device = dr.async_get(hass).async_get_device({(DOMAIN, config_entry.entry_id)})
+    device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, config_entry.entry_id), config_entry.entry_id
+    )
     assert device is not None
     assert device.manufacturer == "WaterFurnace"
     assert device.model == "NDV049A111"
